@@ -1,0 +1,146 @@
+package com.biliaudio.data.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class BiliResponse<T>(
+    val code: Int,
+    val message: String,
+    val data: T? = null
+)
+
+@Serializable
+data class UserInfo(
+    val mid: Long,
+    val name: String,
+    val face: String,
+    val sign: String = "",
+    val level: Int = 0
+)
+
+@Serializable
+data class FavoriteFolder(
+    val id: Long,
+    val fid: Long,
+    val mid: Long,
+    val title: String,
+    val cover: String = "",
+    @SerialName("media_count")
+    val mediaCount: Int = 0,
+    @SerialName("intro")
+    val intro: String = ""
+)
+
+@Serializable
+data class FavoriteListResponse(
+    val list: List<FavoriteFolder>,
+    val count: Int = 0
+)
+
+@Serializable
+data class VideoItem(
+    val id: Long,
+    val type: Int = 0,
+    val title: String,
+    val cover: String = "",
+    val intro: String = "",
+    val duration: Int = 0,
+    val upper: Upper? = null,
+    val attr: Int = 0,
+    val bvid: String = "",
+    val aid: Long = 0
+)
+
+@Serializable
+data class Upper(
+    val mid: Long,
+    val name: String,
+    val face: String = ""
+)
+
+@Serializable
+data class FavoriteResourceResponse(
+    val medias: List<VideoItem>,
+    val has_more: Boolean = false,
+    val total: Int = 0
+)
+
+@Serializable
+data class VideoStreamResponse(
+    @SerialName("accept_quality")
+    val acceptQuality: List<Int> = emptyList(),
+    val dash: DashData? = null
+)
+
+@Serializable
+data class DashData(
+    val duration: Int = 0,
+    val audio: List<AudioItem> = emptyList()
+)
+
+@Serializable
+data class AudioItem(
+    val id: Int,
+    val baseUrl: String = "",
+    @SerialName("base_url")
+    val baseUrlAlt: String = "",
+    val mimeType: String = "",
+    @SerialName("mime_type")
+    val mimeTypeAlt: String = "",
+    val codecs: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val frameRate: String = "",
+    @SerialName("frame_rate")
+    val frameRateAlt: String = "",
+    val sar: String = "",
+    val startWithSap: Int = 0,
+    @SerialName("start_with_sap")
+    val startWithSapAlt: Int = 0,
+    @SerialName("SegmentBase")
+    val segmentBase: SegmentBase? = null,
+    @SerialName("segment_base")
+    val segmentBaseAlt: SegmentBase? = null
+) {
+    val url: String
+        get() = baseUrl.ifEmpty { baseUrlAlt }
+}
+
+@Serializable
+data class SegmentBase(
+    val initialization: String = "",
+    val indexRange: String = ""
+)
+
+@Serializable
+data class QrCodeResponse(
+    val url: String,
+    @SerialName("qrcode_key")
+    val qrcodeKey: String
+)
+
+@Serializable
+data class QrCodeStatusResponse(
+    val code: Int,
+    val message: String,
+    val data: QrCodeData? = null
+)
+
+@Serializable
+data class QrCodeData(
+    val url: String = "",
+    val refresh_token: String = "",
+    val timestamp: Long = 0,
+    val code: Int = 0,
+    val message: String = ""
+)
+
+@Serializable
+data class QrCodeStatusData(
+    val code: Int,
+    val message: String,
+    val url: String? = null,
+    val refresh_token: String? = null,
+    val timestamp: Long? = null
+)
