@@ -1,15 +1,14 @@
 package com.biliaudio
 
 import android.app.Application
-import com.biliaudio.data.preferences.PreferencesManager
+import com.biliaudio.data.network.NetworkModule
+import dagger.hilt.android.HiltAndroidApp
 
+@HiltAndroidApp
 class BiliAudioApp : Application() {
-
-    lateinit var preferencesManager: PreferencesManager
-        private set
-
     override fun onCreate() {
         super.onCreate()
-        preferencesManager = PreferencesManager(this)
+        // 初始化网络模块，恢复持久化的 Cookie
+        NetworkModule.init(this)
     }
 }

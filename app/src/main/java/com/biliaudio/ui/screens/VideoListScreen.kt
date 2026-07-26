@@ -14,13 +14,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -33,9 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.biliaudio.data.model.Track
-import com.biliaudio.data.model.VideoItem
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.biliaudio.ui.components.VideoCard
 import com.biliaudio.ui.components.formatDurationMinSec
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
@@ -47,14 +49,16 @@ import kotlinx.coroutines.launch
 fun VideoListScreen(
     folderId: Long,
     folderName: String,
-    favoriteViewModel: FavoriteViewModel = viewModel(),
-    playerViewModel: PlayerViewModel = viewModel(),
+    favoriteViewModel: FavoriteViewModel = hiltViewModel(),
+    playerViewModel: PlayerViewModel = hiltViewModel(),
     onBackClick: () -> Unit = {}
 ) {
-    val videos by favoriteViewModel.videos.collectAsState()
+    val videos by favoriteViewModel.filteredVideos.collectAsState()
     val isLoading by favoriteViewModel.isLoadingVideos.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     var isLoadingAudio by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var active by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -72,6 +76,14 @@ fun VideoListScreen(
                             contentDescription = null
                         )
                     }
+                },
+                actions = {
+                    IconButton(onClick = { active = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
+                    }
                 }
             )
         },
@@ -81,13 +93,7 @@ fun VideoListScreen(
                     onClick = {
                         coroutineScope.launch {
                             isLoadingAudio = true
-                            val tracks = mutableListOf<Track>()
-                            for (video in videos) {
-                                val audioUrl = favoriteViewModel.getAudioUrl(video)
-                                if (audioUrl != null) {
-                                    tracks.add(favoriteViewModel.videoToTrack(video, audioUrl))
-                                }
-                            }
+                            val tracks = favoriteViewModel.videosToTracks(videos)
                             if (tracks.isNotEmpty()) {
                                 playerViewModel.setPlaylist(tracks)
                             }
@@ -115,7 +121,7 @@ fun VideoListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    CircularProgressIndicator()
                 }
             } else if (videos.isEmpty()) {
                 Box(
@@ -128,12 +134,12 @@ fun VideoListScreen(
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp),
+                            modifier = Modifier.padding(64.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "收藏夹为空",
+                            text = if (query.isEmpty()) "收藏夹为空" else "无匹配结果",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -157,9 +163,8 @@ fun VideoListScreen(
                             duration = formatDurationMinSec(video.duration),
                             onClick = {
                                 coroutineScope.launch {
-                                    val audioUrl = favoriteViewModel.getAudioUrl(video)
-                                    if (audioUrl != null) {
-                                        val track = favoriteViewModel.videoToTrack(video, audioUrl)
+                                    val track = favoriteViewModel.videoToTrack(video)
+                                    if (track != null) {
                                         val currentPlaylist = playerViewModel.playlist.value
                                         val index = currentPlaylist.indexOfFirst { it.id == track.id }
                                         if (index >= 0) {
@@ -184,7 +189,7 @@ fun VideoListScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        androidx.compose.material3.CircularProgressIndicator()
+                        CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "正在获取音频地址...",
@@ -193,6 +198,52 @@ fun VideoListScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // 搜索栏
+    if (active) {
+        SearchBar(
+            query = query,
+            onQueryChange = { newQuery ->
+                query = newQuery
+                favoriteViewModel.search(newQuery)
+            },
+            onSearch = { favoriteViewModel.search(it) },
+            active = active,
+            onActiveChange = { active = it },
+            placeholder = { Text("搜索视频或UP主") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = {
+                    if (query.isNotEmpty()) {
+                        query = ""
+                        favoriteViewModel.search("")
+                    } else {
+                        active = false
+                    }
+                }) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭")
+                }
+            }
+        ) {
+            videos.forEach { video ->
+                VideoCard(
+                    title = video.title,
+                    artist = video.upper?.name ?: "Unknown",
+                    coverUrl = video.cover,
+                    duration = formatDurationMinSec(video.duration),
+                    onClick = {
+                        coroutineScope.launch {
+                            val track = favoriteViewModel.videoToTrack(video)
+                            if (track != null) {
+                                playerViewModel.addToPlaylist(track)
+                                playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
+                            }
+                        }
+                    }
+                )
             }
         }
     }

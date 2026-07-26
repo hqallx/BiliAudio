@@ -34,7 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.ui.components.FolderCard
 import com.biliaudio.ui.viewmodel.AuthViewModel
@@ -43,8 +43,8 @@ import com.biliaudio.ui.viewmodel.FavoriteViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoriteScreen(
-    favoriteViewModel: FavoriteViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel(),
+    favoriteViewModel: FavoriteViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel(),
     onFolderClick: (Long, String) -> Unit = { _, _ -> }
 ) {
     val folders by favoriteViewModel.folders.collectAsState()

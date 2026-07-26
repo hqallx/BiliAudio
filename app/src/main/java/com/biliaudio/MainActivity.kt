@@ -19,17 +19,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -48,24 +51,16 @@ import com.biliaudio.ui.theme.BiliAudioTheme
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
+import com.biliaudio.util.NetworkMonitor
+import com.biliaudio.util.NetworkStatus
 import androidx.media3.session.SessionToken
 import android.content.ComponentName
-import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
-
-    private val playerViewModel: PlayerViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val sessionToken = SessionToken(
-            this,
-            ComponentName(this, PlaybackService::class.java)
-        )
-        playerViewModel.playbackManager.connectController(sessionToken)
 
         setContent {
             BiliAudioTheme {
@@ -73,36 +68,68 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BiliAudioApp(playerViewModel)
+                    BiliAudioApp()
                 }
             }
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        playerViewModel.playbackManager.releaseController()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BiliAudioApp(playerViewModel: PlayerViewModel) {
+fun BiliAudioApp(
+    playerViewModel: PlayerViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel(),
+    favoriteViewModel: FavoriteViewModel = hiltViewModel()
+) {
     val navController = rememberNavController()
-    val authViewModel: AuthViewModel = viewModel()
-    val favoriteViewModel: FavoriteViewModel = viewModel()
 
-    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-    val currentTrack by playerViewModel.currentTrack.collectAsState()
-    val isPlaying by playerViewModel.isPlaying.collectAsState()
-    val currentPosition by playerViewModel.currentPosition.collectAsState()
-    val duration by playerViewModel.duration.collectAsState()
-    val repeatMode by playerViewModel.repeatMode.collectAsState()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
+    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
+    val currentPosition by playerViewModel.currentPosition.collectAsStateWithLifecycle()
+    val duration by playerViewModel.duration.collectAsStateWithLifecycle()
+    val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
+
+    val toast by authViewModel.toast.collectAsStateWithLifecycle()
+    val favToast by favoriteViewModel.toast.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var showPlayer by remember { mutableStateOf(false) }
 
+    // 连接到播放服务
     LaunchedEffect(Unit) {
+        val sessionToken = SessionToken(
+            navController.context.applicationContext,
+            ComponentName(navController.context.applicationContext, PlaybackService::class.java)
+        )
+        playerViewModel.playbackManager.connectController(sessionToken)
         playerViewModel.startProgressUpdate()
+    }
+
+    // 网络状态监听
+    val context = navController.context
+    LaunchedEffect(Unit) {
+        NetworkMonitor.observe(context).collect { status ->
+            if (status == NetworkStatus.LOST || status == NetworkStatus.UNAVAILABLE) {
+                snackbarHostState.showSnackbar("网络不可用")
+            }
+        }
+    }
+
+    // 显示 Toast
+    LaunchedEffect(toast) {
+        toast?.let {
+            snackbarHostState.showSnackbar(it)
+            authViewModel.consumeToast()
+        }
+    }
+    LaunchedEffect(favToast) {
+        favToast?.let {
+            snackbarHostState.showSnackbar(it)
+            favoriteViewModel.consumeToast()
+        }
     }
 
     val items = listOf(
@@ -118,6 +145,7 @@ fun BiliAudioApp(playerViewModel: PlayerViewModel) {
     } == true && isLoggedIn
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             Column(
                 modifier = Modifier.fillMaxWidth()

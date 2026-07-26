@@ -1,5 +1,8 @@
 package com.biliaudio.data.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Track(
     val id: String,
     val title: String,

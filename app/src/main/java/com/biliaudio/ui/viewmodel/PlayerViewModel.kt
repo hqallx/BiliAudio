@@ -3,17 +3,24 @@ package com.biliaudio.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.biliaudio.data.Result
 import com.biliaudio.data.model.Track
+import com.biliaudio.data.repository.VideoRepository
 import com.biliaudio.player.PlaybackManager
 import com.biliaudio.player.RepeatMode
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class PlayerViewModel @Inject constructor(
+    application: Application,
+    private val videoRepository: VideoRepository
+) : AndroidViewModel(application) {
 
     val playbackManager = PlaybackManager(application)
 
@@ -32,7 +39,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         progressJob = viewModelScope.launch {
             while (true) {
                 playbackManager.updateProgress()
-                delay(500)
+                delay(com.biliaudio.data.BiliConstants.PROGRESS_UPDATE_INTERVAL_MS)
             }
         }
     }
@@ -43,25 +50,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun play() = playbackManager.play()
-
     fun pause() = playbackManager.pause()
-
     fun togglePlayPause() = playbackManager.togglePlayPause()
-
     fun seekTo(position: Long) = playbackManager.seekTo(position)
-
     fun next() = playbackManager.next()
-
     fun previous() = playbackManager.previous()
-
-    fun setPlaylist(tracks: List<Track>, startIndex: Int = 0) {
+    fun setPlaylist(tracks: List<Track>, startIndex: Int = 0) =
         playbackManager.setPlaylist(tracks, startIndex)
-    }
-
     fun addToPlaylist(track: Track) = playbackManager.addToPlaylist(track)
-
     fun playAt(index: Int) = playbackManager.playAt(index)
-
     fun toggleRepeatMode() = playbackManager.toggleRepeatMode()
 
     override fun onCleared() {

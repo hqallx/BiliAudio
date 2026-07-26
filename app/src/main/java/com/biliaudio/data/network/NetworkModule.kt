@@ -1,8 +1,7 @@
 package com.biliaudio.data.network
 
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
+import android.content.Context
+import com.biliaudio.data.BiliConstants
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -14,12 +13,24 @@ import java.util.concurrent.TimeUnit
 
 object NetworkModule {
 
+    @Volatile
     private var cookieJar: BiliCookieJar? = null
 
-    fun provideCookieJar(): BiliCookieJar {
+    @Volatile
+    private var api: BiliApi? = null
+
+    fun init(context: Context) {
         if (cookieJar == null) {
-            cookieJar = BiliCookieJar()
+            synchronized(this) {
+                if (cookieJar == null) {
+                    cookieJar = BiliCookieJar(context.applicationContext)
+                }
+            }
         }
+    }
+
+    fun provideCookieJar(): BiliCookieJar {
+        checkNotNull(cookieJar) { "NetworkModule.init() must be called first" }
         return cookieJar!!
     }
 
@@ -31,9 +42,9 @@ object NetworkModule {
         val headerInterceptor = Interceptor { chain ->
             val originalRequest = chain.request()
             val request = originalRequest.newBuilder()
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Referer", "https://www.bilibili.com/")
-                .header("Origin", "https://www.bilibili.com")
+                .header("User-Agent", BiliConstants.USER_AGENT)
+                .header("Referer", BiliConstants.WEB_BASE_URL + "/")
+                .header("Origin", BiliConstants.WEB_BASE_URL)
                 .build()
             chain.proceed(request)
         }
@@ -51,48 +62,23 @@ object NetworkModule {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
-        prettyPrint = true
+        prettyPrint = false
         coerceInputValues = true
     }
 
     fun provideBiliApi(): BiliApi {
-        val contentType = "application/json; charset=utf-8".toMediaType()
-        return Retrofit.Builder()
-            .baseUrl("https://api.bilibili.com/")
-            .client(provideOkHttpClient())
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
-            .create(BiliApi::class.java)
-    }
-}
-
-class BiliCookieJar : CookieJar {
-
-    private val cookieStore = mutableMapOf<String, List<Cookie>>()
-
-    var onCookiesUpdated: ((List<Cookie>) -> Unit)? = null
-
-    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val host = url.host
-        cookieStore[host] = cookies
-        onCookiesUpdated?.invoke(cookies)
-    }
-
-    override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val host = url.host
-        return cookieStore[host] ?: emptyList()
-    }
-
-    fun setCookies(cookies: List<Cookie>) {
-        cookieStore["bilibili.com"] = cookies
-        cookieStore["api.bilibili.com"] = cookies
-    }
-
-    fun getCookies(): List<Cookie> {
-        return cookieStore.values.flatten()
-    }
-
-    fun clearCookies() {
-        cookieStore.clear()
+        api?.let { return it }
+        synchronized(this) {
+            api ?: run {
+                val contentType = "application/json; charset=utf-8".toMediaType()
+                api = Retrofit.Builder()
+                    .baseUrl(BiliConstants.BASE_URL)
+                    .client(provideOkHttpClient())
+                    .addConverterFactory(json.asConverterFactory(contentType))
+                    .build()
+                    .create(BiliApi::class.java)
+                return api!!
+            }
+        }
     }
 }

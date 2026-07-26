@@ -182,7 +182,24 @@ class PlaybackManager(private val context: Context) {
             _duration.value = it.duration.coerceAtLeast(0L)
         }
     }
+
+    /**
+     * 返回当前播放状态快照，用于持久化。
+     */
+    fun snapshotPlaybackState(): PlaybackSnapshot {
+        return PlaybackSnapshot(
+            playlist = _playlist.value,
+            currentIndex = _currentIndex.value,
+            position = _currentPosition.value
+        )
+    }
 }
+
+data class PlaybackSnapshot(
+    val playlist: List<Track>,
+    val currentIndex: Int,
+    val position: Long
+)
 
 enum class RepeatMode {
     NONE,

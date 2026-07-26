@@ -32,14 +32,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.LoginStatus
 
 @Composable
 fun LoginScreen(
-    authViewModel: AuthViewModel = viewModel(),
+    authViewModel: AuthViewModel = hiltViewModel(),
     onLoginSuccess: () -> Unit = {}
 ) {
     val loginStatus by authViewModel.loginStatus.collectAsState()

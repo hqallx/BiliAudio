@@ -3,23 +3,28 @@ package com.biliaudio.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.biliaudio.data.Result
 import com.biliaudio.data.model.UserInfo
+import com.biliaudio.data.network.CookieHelper
 import com.biliaudio.data.preferences.PreferencesManager
-import com.biliaudio.data.repository.BiliRepository
+import com.biliaudio.data.repository.AuthRepository
 import com.biliaudio.data.network.QrCodeStatusData
+import com.biliaudio.data.BiliConstants
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import okhttp3.Cookie
-import okhttp3.HttpUrl
+import javax.inject.Inject
 
-class AuthViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repository = BiliRepository()
-    private val preferencesManager = PreferencesManager(application)
+@HiltViewModel
+class AuthViewModel @Inject constructor(
+    application: Application,
+    private val authRepository: AuthRepository,
+    private val preferencesManager: PreferencesManager
+) : AndroidViewModel(application) {
 
     private val _qrCodeUrl = MutableStateFlow<String?>(null)
     val qrCodeUrl: StateFlow<String?> = _qrCodeUrl.asStateFlow()
@@ -35,12 +40,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+
     private var pollJob: Job? = null
 
     init {
+        // 应用启动时检查 Cookie 是否有效
         viewModelScope.launch {
-            preferencesManager.cookies.collect { cookies ->
-                if (cookies.isNotEmpty()) {
+            val hasLogin = authRepository.isLoggedIn()
+            _isLoggedIn.value = hasLogin
+            if (hasLogin) {
+                loadUserInfo()
+            }
+        }
+
+        // 监听 Cookie 更新（扫码登录成功时触发）
+        authRepository.onCookiesUpdated = { cookies ->
+            viewModelScope.launch {
+                if (CookieHelper.hasLoginCookies(cookies)) {
                     _isLoggedIn.value = true
                     loadUserInfo()
                 }
@@ -51,18 +69,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun generateQrCode() {
         viewModelScope.launch {
             _loginStatus.value = LoginStatus.Loading
-            try {
-                val response = repository.generateQrCode()
-                if (response.code == 0 && response.data != null) {
-                    _qrCodeUrl.value = response.data.url
-                    _qrCodeKey.value = response.data.qrcodeKey
-                    _loginStatus.value = LoginStatus.QrCodeReady
-                    startPolling()
-                } else {
-                    _loginStatus.value = LoginStatus.Error(response.message)
+            when (val result = authRepository.generateQrCode()) {
+                is Result.Success -> {
+                    val response = result.data
+                    if (response.code == 0 && response.data != null) {
+                        _qrCodeUrl.value = response.data.url
+                        _qrCodeKey.value = response.data.qrcodeKey
+                        _loginStatus.value = LoginStatus.QrCodeReady
+                        startPolling()
+                    } else {
+                        _loginStatus.value = LoginStatus.Error(response.message)
+                    }
                 }
-            } catch (e: Exception) {
-                _loginStatus.value = LoginStatus.Error(e.message ?: "Unknown error")
+                is Result.Error -> {
+                    _loginStatus.value = LoginStatus.Error(result.message)
+                    _toast.value = result.message
+                }
+                Result.Loading -> {}
             }
         }
     }
@@ -71,64 +94,66 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         pollJob?.cancel()
         val qrKey = _qrCodeKey.value ?: return
 
-        repository.setCookieListener { cookies ->
-            viewModelScope.launch {
-                val cookieStr = cookies.joinToString("; ") { "${it.name}=${it.value}" }
-                preferencesManager.saveCookies(cookieStr)
-                _isLoggedIn.value = true
-                loadUserInfo()
-            }
-        }
-
         pollJob = viewModelScope.launch {
             while (true) {
-                try {
-                    val response = repository.checkQrCodeStatus(qrKey)
-                    when (response.data?.code) {
-                        86101 -> {
-                            _loginStatus.value = LoginStatus.Expired
-                            break
-                        }
-                        0 -> {
-                            _loginStatus.value = LoginStatus.Success
-                            break
-                        }
-                        86090 -> {
-                            _loginStatus.value = LoginStatus.Scanned
-                        }
-                        else -> {
-                            _loginStatus.value = LoginStatus.QrCodeReady
+                delay(BiliConstants.QR_CODE_POLL_INTERVAL_MS)
+                when (val result = authRepository.checkQrCodeStatus(qrKey)) {
+                    is Result.Success -> {
+                        when (result.data.data?.code) {
+                            BiliConstants.QrCodeStatus.EXPIRED -> {
+                                _loginStatus.value = LoginStatus.Expired
+                                break
+                            }
+                            BiliConstants.QrCodeStatus.SUCCESS -> {
+                                _loginStatus.value = LoginStatus.Success
+                                break
+                            }
+                            BiliConstants.QrCodeStatus.SCANNED_WAITING_CONFIRM -> {
+                                _loginStatus.value = LoginStatus.Scanned
+                            }
+                            BiliConstants.QrCodeStatus.WAITING_FOR_SCAN -> {
+                                _loginStatus.value = LoginStatus.QrCodeReady
+                            }
                         }
                     }
-                } catch (e: Exception) {
-                    // ignore
+                    is Result.Error -> {
+                        // 网络错误时继续轮询
+                    }
+                    Result.Loading -> {}
                 }
-                delay(3000)
             }
         }
     }
 
     fun loadUserInfo() {
         viewModelScope.launch {
-            try {
-                val response = repository.getUserInfo()
-                if (response.code == 0 && response.data != null) {
-                    _userInfo.value = response.data
-                    preferencesManager.saveUserInfo(
-                        id = response.data.mid.toString(),
-                        name = response.data.name,
-                        avatar = response.data.face
-                    )
+            when (val result = authRepository.getUserInfo()) {
+                is Result.Success -> {
+                    val response = result.data
+                    if (response.code == 0 && response.data != null) {
+                        _userInfo.value = response.data
+                        preferencesManager.saveUserInfo(
+                            id = response.data.mid.toString(),
+                            name = response.data.name,
+                            avatar = response.data.face
+                        )
+                    }
                 }
-            } catch (e: Exception) {
-                // ignore
+                is Result.Error -> {
+                    // Cookie 可能过期
+                    if (_isLoggedIn.value) {
+                        _toast.value = "登录已失效，请重新登录"
+                        logout()
+                    }
+                }
+                Result.Loading -> {}
             }
         }
     }
 
     fun logout() {
         viewModelScope.launch {
-            repository.clearCookies()
+            authRepository.clearCookies()
             preferencesManager.clearAll()
             _isLoggedIn.value = false
             _userInfo.value = null
@@ -139,6 +164,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshQrCode() {
         pollJob?.cancel()
         generateQrCode()
+    }
+
+    fun consumeToast() {
+        _toast.value = null
     }
 
     override fun onCleared() {
