@@ -1,7 +1,6 @@
 package com.biliaudio.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
@@ -9,7 +8,6 @@ import com.biliaudio.data.model.UserInfo
 import com.biliaudio.data.network.CookieHelper
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
-import com.biliaudio.data.model.QrCodeStatusData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,10 +19,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    application: Application,
     private val authRepository: AuthRepository,
     private val preferencesManager: PreferencesManager
-) : AndroidViewModel(application) {
+) : ViewModel() {
 
     private val _qrCodeUrl = MutableStateFlow<String?>(null)
     val qrCodeUrl: StateFlow<String?> = _qrCodeUrl.asStateFlow()

@@ -9,10 +9,16 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.biliaudio.data.model.Track
 import com.google.common.util.concurrent.MoreExecutors
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class PlaybackManager(private val context: Context) {
+@Singleton
+class PlaybackManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     private var mediaController: MediaController? = null
 

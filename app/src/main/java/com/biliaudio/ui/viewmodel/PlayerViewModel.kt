@@ -1,9 +1,8 @@
 package com.biliaudio.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.biliaudio.data.Result
+import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.model.Track
 import com.biliaudio.data.repository.VideoRepository
 import com.biliaudio.player.PlaybackManager
@@ -11,18 +10,15 @@ import com.biliaudio.player.RepeatMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    application: Application,
-    private val videoRepository: VideoRepository
-) : AndroidViewModel(application) {
-
-    val playbackManager = PlaybackManager(application)
+    private val videoRepository: VideoRepository,
+    val playbackManager: PlaybackManager
+) : ViewModel() {
 
     val isPlaying: StateFlow<Boolean> = playbackManager.isPlaying
     val currentTrack: StateFlow<Track?> = playbackManager.currentTrack
@@ -39,7 +35,7 @@ class PlayerViewModel @Inject constructor(
         progressJob = viewModelScope.launch {
             while (true) {
                 playbackManager.updateProgress()
-                delay(com.biliaudio.data.BiliConstants.PROGRESS_UPDATE_INTERVAL_MS)
+                delay(BiliConstants.PROGRESS_UPDATE_INTERVAL_MS)
             }
         }
     }

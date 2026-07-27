@@ -100,20 +100,17 @@ fun BiliAudioApp(
 
     var showPlayer by remember { mutableStateOf(false) }
 
-    // 连接到播放服务
+    // 连接到播放服务 & 网络状态监听
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     LaunchedEffect(Unit) {
         val sessionToken = SessionToken(
-            navController.context.applicationContext,
-            ComponentName(navController.context.applicationContext, PlaybackService::class.java)
+            appContext,
+            ComponentName(appContext, PlaybackService::class.java)
         )
         playerViewModel.playbackManager.connectController(sessionToken)
         playerViewModel.startProgressUpdate()
-    }
 
-    // 网络状态监听
-    val context = navController.context
-    LaunchedEffect(Unit) {
-        NetworkMonitor.observe(context).collect { status ->
+        NetworkMonitor.observe(appContext).collect { status ->
             if (status == NetworkStatus.LOST || status == NetworkStatus.UNAVAILABLE) {
                 snackbarHostState.showSnackbar("网络不可用")
             }
