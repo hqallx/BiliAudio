@@ -77,8 +77,8 @@ object NetworkModule {
                     .addConverterFactory(json.asConverterFactory(contentType))
                     .build()
                     .create(BiliApi::class.java)
-                return api!!
             }
         }
+        return api!!
     }
 }
