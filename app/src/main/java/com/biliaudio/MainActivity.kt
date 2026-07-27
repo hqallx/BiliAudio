@@ -55,7 +55,9 @@ import com.biliaudio.util.NetworkMonitor
 import com.biliaudio.util.NetworkStatus
 import androidx.media3.session.SessionToken
 import android.content.ComponentName
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

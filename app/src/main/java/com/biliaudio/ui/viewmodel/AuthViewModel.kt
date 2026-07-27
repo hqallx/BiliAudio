@@ -3,13 +3,13 @@ package com.biliaudio.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.UserInfo
 import com.biliaudio.data.network.CookieHelper
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
-import com.biliaudio.data.network.QrCodeStatusData
-import com.biliaudio.data.BiliConstants
+import com.biliaudio.data.model.QrCodeStatusData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
