@@ -30,10 +30,4 @@ interface BiliApi {
         @Query("fnver") fnver: Int = 0,
         @Query("fourk") fourk: Int = 1
     ): BiliResponse<VideoStreamResponse>
-
-    @GET("x/passport-login/web/qrcode/generate")
-    suspend fun generateQrCode(): BiliResponse<QrCodeResponse>
-
-    @GET("x/passport-login/web/qrcode/poll")
-    suspend fun checkQrCodeStatus(@Query("qrcode_key") qrcodeKey: String): BiliResponse<QrCodeStatusData>
 }

@@ -37,17 +37,19 @@ class BiliCookieJar(context: Context) : CookieJar {
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        // bilibili.com 和 api.bilibili.com 共享同一组 cookie
         val host = url.host
-        val direct = cookieStore[host] ?: emptyList()
-        val shared = cookieStore["bilibili.com"] ?: emptyList()
-        return (direct + shared).distinctBy { it.name }
+        // 所有 bilibili.com 子域共享同一组 Cookie，
+        // 因为登录成功后 Set-Cookie 的 Domain 通常是 .bilibili.com。
+        return if (host.endsWith("bilibili.com")) {
+            getAllCookies().distinctBy { it.name }
+        } else {
+            cookieStore[host] ?: emptyList()
+        }
     }
 
     fun setCookies(cookies: List<Cookie>) {
         cookieStore.clear()
         cookieStore["bilibili.com"] = cookies.toMutableList()
-        cookieStore["api.bilibili.com"] = cookies.toMutableList()
         persist()
         onCookiesUpdated?.invoke(cookies)
     }
@@ -68,7 +70,6 @@ class BiliCookieJar(context: Context) : CookieJar {
         if (cookieString.isNotEmpty()) {
             val cookies = CookieHelper.parseCookies(cookieString)
             cookieStore["bilibili.com"] = cookies.toMutableList()
-            cookieStore["api.bilibili.com"] = cookies.toMutableList()
         }
     }
 

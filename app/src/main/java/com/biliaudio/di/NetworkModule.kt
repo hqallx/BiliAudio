@@ -3,6 +3,7 @@ package com.biliaudio.di
 import android.content.Context
 import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.network.BiliCookieJar
+import com.biliaudio.data.network.BiliPassportApi
 import com.biliaudio.data.network.NetworkModule
 import com.biliaudio.data.preferences.PreferencesManager
 import dagger.Module
@@ -40,5 +41,11 @@ object NetworkModule {
     @Singleton
     fun provideBiliApi(client: OkHttpClient): BiliApi {
         return NetworkModule.provideBiliApi()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBiliPassportApi(client: OkHttpClient): BiliPassportApi {
+        return NetworkModule.providePassportApi()
     }
 }

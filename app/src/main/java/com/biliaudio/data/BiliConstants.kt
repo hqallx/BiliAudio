@@ -2,6 +2,7 @@ package com.biliaudio.data
 
 object BiliConstants {
     const val BASE_URL = "https://api.bilibili.com/"
+    const val PASSPORT_BASE_URL = "https://passport.bilibili.com/"
     const val WEB_BASE_URL = "https://www.bilibili.com"
 
     const val DEFAULT_PAGE_SIZE = 20

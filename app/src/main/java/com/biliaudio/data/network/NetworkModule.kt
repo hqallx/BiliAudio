@@ -19,6 +19,9 @@ object NetworkModule {
     @Volatile
     private var api: BiliApi? = null
 
+    @Volatile
+    private var passportApi: BiliPassportApi? = null
+
     fun init(context: Context) {
         if (cookieJar == null) {
             synchronized(this) {
@@ -80,5 +83,21 @@ object NetworkModule {
             }
         }
         return api!!
+    }
+
+    fun providePassportApi(): BiliPassportApi {
+        passportApi?.let { return it }
+        synchronized(this) {
+            passportApi ?: run {
+                val contentType = "application/json; charset=utf-8".toMediaType()
+                passportApi = Retrofit.Builder()
+                    .baseUrl(BiliConstants.PASSPORT_BASE_URL)
+                    .client(provideOkHttpClient())
+                    .addConverterFactory(json.asConverterFactory(contentType))
+                    .build()
+                    .create(BiliPassportApi::class.java)
+            }
+        }
+        return passportApi!!
     }
 }
