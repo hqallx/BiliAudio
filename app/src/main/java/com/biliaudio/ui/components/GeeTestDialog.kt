@@ -60,7 +60,7 @@ fun GeeTestDialog(
             html, body { margin:0; padding:0; height:100%; background:#fff; font-family: sans-serif; }
             #captcha { display:flex; align-items:center; justify-content:center; height:100%; }
         </style>
-        <script src="https://static.geetest.com/static/tools/gt.js"></script>
+        <script src="https://static.geetest.com/static/js/gt.0.4.9.js"></script>
         </head>
         <body>
         <div id="captcha"></div>
@@ -71,25 +71,19 @@ fun GeeTestDialog(
             challenge: '$challenge',
             offline: false,
             new_captcha: true,
-            product: 'embed',
-            width: '100%'
+            product: 'popup',
+            width: '100%',
+            https: true
           }, function(captchaObj) {
             captchaObj.appendTo('#captcha');
             captchaObj.onSuccess(function() {
               var r = captchaObj.getValidate();
-              // 必须检查每个字段是否存在且非空。
-              // @JavascriptInterface 会把 JS 的 undefined 转为 Java 字符串 "undefined"，
-              // 导致 bilibili API 收到无效的验证码参数，返回"验证码错误"。
               if (r && r.geetest_challenge && r.geetest_validate && r.geetest_seccode) {
-                var challenge = String(r.geetest_challenge);
-                var validate = String(r.geetest_validate);
-                var seccode = String(r.geetest_seccode);
-                // GeeTest v3 的 seccode 格式应为 "validate|jordan"，
-                // 某些 SDK 版本可能不追加后缀，需手动补全
-                if (seccode.indexOf('|') === -1) {
-                  seccode = validate + '|jordan';
-                }
-                Android.onSuccess(challenge, validate, seccode);
+                Android.onSuccess(
+                  String(r.geetest_challenge),
+                  String(r.geetest_validate),
+                  String(r.geetest_seccode)
+                );
               } else {
                 Android.onError();
               }

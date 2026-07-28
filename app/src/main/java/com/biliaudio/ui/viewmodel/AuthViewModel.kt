@@ -43,14 +43,6 @@ class AuthViewModel @Inject constructor(
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    /** 游客模式：用户点击"跳过"进入无登录浏览。 */
-    private val _isGuestMode = MutableStateFlow(false)
-    val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
-
-    /** 是否可以浏览内容（已登录或游客模式）。 */
-    val canBrowse: Boolean
-        get() = _isLoggedIn.value || _isGuestMode.value
-
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
@@ -138,13 +130,8 @@ class AuthViewModel @Inject constructor(
                                 break
                             }
                             BiliConstants.QrCodeStatus.SUCCESS -> {
-                                // 二维码登录成功：从返回的 url 中提取并保存登录 Cookie。
-                                // bilibili 的 poll 接口在成功时把 SESSDATA / DedeUserID 等
-                                // 放在 data.url 查询参数中，不主动提取则登录态未真正建立。
-                                val loginUrl = result.data.data?.url
-                                if (!loginUrl.isNullOrEmpty()) {
-                                    authRepository.saveQrLoginCookies(loginUrl)
-                                }
+                                // 二维码登录成功：登录 Cookie 已由 OkHttp CookieJar
+                                // 从 Set-Cookie 响应头自动捕获（照搬 BBPlayer）。
                                 _loginStatus.value = LoginStatus.Success
                                 _isLoggedIn.value = true
                                 loadUserInfo()
@@ -272,10 +259,8 @@ class AuthViewModel @Inject constructor(
 
     /** 用户输入短信验证码后调用，完成登录。 */
     fun loginWithSmsCode(code: String) {
-        val cap = captcha
-        val gee = geeTestResult
         val key = smsCaptchaKey
-        if (cap == null || gee == null || key == null) {
+        if (key == null) {
             _smsLoginStep.value = SmsLoginStep.Error("请先获取验证码")
             return
         }
@@ -290,9 +275,7 @@ class AuthViewModel @Inject constructor(
                 cid = pendingCid,
                 tel = pendingTel,
                 code = code,
-                captchaKey = key,
-                captcha = cap,
-                geeTestResult = gee
+                captchaKey = key
             )) {
                 is Result.Success -> {
                     val resp = result.data
@@ -367,17 +350,11 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /** 跳过登录，进入游客浏览模式。 */
-    fun enterGuestMode() {
-        _isGuestMode.value = true
-    }
-
     fun logout() {
         viewModelScope.launch {
             authRepository.clearCookies()
             preferencesManager.clearAll()
             _isLoggedIn.value = false
-            _isGuestMode.value = false
             _userInfo.value = null
             _loginStatus.value = LoginStatus.Idle
             _smsLoginStep.value = SmsLoginStep.Idle

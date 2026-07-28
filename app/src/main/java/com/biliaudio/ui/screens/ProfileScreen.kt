@@ -50,7 +50,6 @@ fun ProfileScreen(
 ) {
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-    val isGuestMode by authViewModel.isGuestMode.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -105,17 +104,13 @@ fun ProfileScreen(
 
                     Column {
                         Text(
-                            text = when {
-                                isLoggedIn -> userInfo?.name ?: "已登录"
-                                isGuestMode -> "游客模式"
-                                else -> "未登录"
-                            },
+                            text = if (isLoggedIn) (userInfo?.name ?: "已登录") else "未登录",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        when {
-                            isLoggedIn -> userInfo?.sign?.let {
+                        if (isLoggedIn) {
+                            userInfo?.sign?.let {
                                 Text(
                                     text = it.ifEmpty { "这个人很懒，什么都没有写" },
                                     style = MaterialTheme.typography.bodyMedium,
@@ -123,12 +118,12 @@ fun ProfileScreen(
                                     maxLines = 2
                                 )
                             }
-                            isGuestMode -> Text(
+                        } else {
+                            Text(
                                 text = "登录后可同步B站收藏夹",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
-                            else -> {}
                         }
                     }
                 }
@@ -172,7 +167,7 @@ fun ProfileScreen(
                             subtitle = "清除本地登录状态",
                             onClick = { showLogoutDialog = true }
                         )
-                    } else if (isGuestMode) {
+                    } else {
                         SettingsItem(
                             icon = Icons.Default.ExitToApp,
                             title = "去登录",

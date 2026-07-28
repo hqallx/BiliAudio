@@ -116,12 +116,9 @@ fun LoginScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 右上角「跳过」按钮：进入游客模式浏览
+        // 右上角「跳过」按钮：直接进入主界面浏览（无需登录）
         TextButton(
-            onClick = {
-                authViewModel.enterGuestMode()
-                onLoginSuccess()
-            },
+            onClick = { onLoginSuccess() },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)

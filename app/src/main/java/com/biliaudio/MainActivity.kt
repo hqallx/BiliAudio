@@ -87,7 +87,6 @@ fun AppRoot(
     val navController = rememberNavController()
 
     val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle()
-    val isGuestMode by authViewModel.isGuestMode.collectAsStateWithLifecycle()
     val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     val currentPosition by playerViewModel.currentPosition.collectAsStateWithLifecycle()
@@ -140,9 +139,10 @@ fun AppRoot(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    // 底部导航栏在非登录页（收藏/播放列表/我的）时显示，登录页不显示
     val showBottomBar = currentDestination?.hierarchy?.any { destination ->
         items.any { it.route == destination.route }
-    } == true && (isLoggedIn || isGuestMode)
+    } == true
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -196,7 +196,7 @@ fun AppRoot(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = if (isLoggedIn || isGuestMode) "favorite" else "login"
+                startDestination = if (isLoggedIn) "favorite" else "login"
             ) {
                 composable("login") {
                     LoginScreen(
