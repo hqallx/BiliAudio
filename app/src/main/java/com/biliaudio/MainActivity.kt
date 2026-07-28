@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BiliAudioApp()
+                    AppRoot()
                 }
             }
         }
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BiliAudioApp(
+fun AppRoot(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel(),
     favoriteViewModel: FavoriteViewModel = hiltViewModel()

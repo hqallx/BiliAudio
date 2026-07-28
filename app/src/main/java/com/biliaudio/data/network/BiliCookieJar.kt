@@ -1,20 +1,19 @@
 package com.biliaudio.data.network
 
 import android.content.Context
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import android.content.SharedPreferences
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
-import com.biliaudio.data.preferences.PreferencesManager
 
 /**
- * 持久化 CookieJar：登录 Cookie 自动持久化到 DataStore，
- * 应用启动时通过 [restore] 从 DataStore 恢复，避免每次重启都要重新登录。
+ * 持久化 CookieJar：使用 SharedPreferences 同步读写 Cookie，
+ * 避免在主线程使用 runBlocking 读取 DataStore 导致崩溃。
  */
-class BiliCookieJar(private val context: Context) : CookieJar {
+class BiliCookieJar(context: Context) : CookieJar {
 
-    private val preferencesManager by lazy { PreferencesManager(context) }
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("bili_cookies", Context.MODE_PRIVATE)
 
     private val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
 
@@ -33,7 +32,7 @@ class BiliCookieJar(private val context: Context) : CookieJar {
             store.add(incoming)
         }
         cookieStore[host] = store
-        persistAsync()
+        persist()
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
@@ -49,7 +48,7 @@ class BiliCookieJar(private val context: Context) : CookieJar {
         cookieStore.clear()
         cookieStore["bilibili.com"] = cookies.toMutableList()
         cookieStore["api.bilibili.com"] = cookies.toMutableList()
-        persistAsync()
+        persist()
         onCookiesUpdated?.invoke(cookies)
     }
 
@@ -57,15 +56,15 @@ class BiliCookieJar(private val context: Context) : CookieJar {
 
     fun clearCookies() {
         cookieStore.clear()
-        runBlocking { preferencesManager.saveCookies("") }
+        prefs.edit().remove("cookies").apply()
         onCookiesUpdated?.invoke(emptyList())
     }
 
     /**
-     * 从 DataStore 恢复之前保存的 Cookie。
+     * 从 SharedPreferences 恢复之前保存的 Cookie（同步操作，安全在主线程调用）。
      */
     private fun restore() {
-        val cookieString = runBlocking { preferencesManager.cookies.first() }
+        val cookieString = prefs.getString("cookies", "") ?: ""
         if (cookieString.isNotEmpty()) {
             val cookies = CookieHelper.parseCookies(cookieString)
             cookieStore["bilibili.com"] = cookies.toMutableList()
@@ -73,8 +72,11 @@ class BiliCookieJar(private val context: Context) : CookieJar {
         }
     }
 
-    private fun persistAsync() {
+    /**
+     * 将 Cookie 持久化到 SharedPreferences（同步操作，安全在任何线程调用）。
+     */
+    private fun persist() {
         val cookieString = CookieHelper.cookiesToString(getAllCookies())
-        runBlocking { preferencesManager.saveCookies(cookieString) }
+        prefs.edit().putString("cookies", cookieString).apply()
     }
 }
