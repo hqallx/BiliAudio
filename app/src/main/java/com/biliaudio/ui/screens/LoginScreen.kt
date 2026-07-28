@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -109,92 +110,110 @@ fun LoginScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-            .imePadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(40.dp))
-
-        Text(
-            text = "BiliAudio",
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "B站收藏夹音频播放器",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab.ordinal,
-            modifier = Modifier.fillMaxWidth()
+        // 右上角「跳过」按钮：进入无登录态浏览（仅展示已下载内容）
+        TextButton(
+            onClick = { onLoginSuccess() },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
         ) {
-            LoginTab.entries.forEach { tab ->
-                Tab(
-                    selected = selectedTab == tab,
-                    onClick = {
-                        selectedTab = tab
-                        if (tab == LoginTab.Sms) {
-                            authViewModel.resetSmsLogin()
-                        }
-                    },
-                    text = { Text(tab.label) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            Text(
+                text = "跳过",
+                style = MaterialTheme.typography.titleSmall
             )
-        ) {
-            when (selectedTab) {
-                LoginTab.QrCode -> QrCodeContent(
-                    loginStatus = loginStatus,
-                    qrCodeUrl = qrCodeUrl,
-                    onGenerate = { authViewModel.generateQrCode() },
-                    onRefresh = { authViewModel.refreshQrCode() }
-                )
-                LoginTab.Sms -> SmsContent(
-                    step = smsStep,
-                    countdown = smsCountdown,
-                    onSendCode = { cid, tel -> authViewModel.startSmsLogin(cid, tel) },
-                    onLogin = { code -> authViewModel.loginWithSmsCode(code) },
-                    onReset = { authViewModel.resetSmsLogin() }
-                )
-            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp)
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(40.dp))
 
-        // 跳转 B站客户端按钮：让用户在 B站 App 内登录后，
-        // 回到本应用用扫码登录（用 B站 App 扫下方二维码）
-        BiliClientButton()
+            Text(
+                text = "BiliAudio",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "登录后即可访问您的B站收藏夹\n仅用于音频播放，不会收集任何用户信息",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
+            Text(
+                text = "B站收藏夹音频播放器",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            PrimaryTabRow(
+                selectedTabIndex = selectedTab.ordinal,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                LoginTab.entries.forEach { tab ->
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = {
+                            selectedTab = tab
+                            if (tab == LoginTab.Sms) {
+                                authViewModel.resetSmsLogin()
+                            }
+                        },
+                        text = { Text(tab.label) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                when (selectedTab) {
+                    LoginTab.QrCode -> QrCodeContent(
+                        loginStatus = loginStatus,
+                        qrCodeUrl = qrCodeUrl,
+                        onGenerate = { authViewModel.generateQrCode() },
+                        onRefresh = { authViewModel.refreshQrCode() }
+                    )
+                    LoginTab.Sms -> SmsContent(
+                        step = smsStep,
+                        countdown = smsCountdown,
+                        onSendCode = { cid, tel -> authViewModel.startSmsLogin(cid, tel) },
+                        onLogin = { code -> authViewModel.loginWithSmsCode(code) },
+                        onReset = { authViewModel.resetSmsLogin() }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 跳转 B站客户端按钮：让用户在 B站 App 内登录后，
+            // 回到本应用用扫码登录（用 B站 App 扫下方二维码）
+            BiliClientButton()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "登录后即可访问您的B站收藏夹\n仅用于音频播放，不会收集任何用户信息",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 
     // GeeTest 滑块弹窗：等待用户验证
@@ -360,56 +379,59 @@ private fun SmsContent(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 区号 + 手机号
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
+        // 区号 + 手机号：ExposedDropdownMenuBox 只包住区号输入框，
+        // 否则 menuAnchor 会作用到整个 Row，点击手机号输入框也会弹出区号菜单。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-                verticalAlignment = Alignment.CenterVertically
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
+                modifier = Modifier.weight(0.45f)
             ) {
                 OutlinedTextField(
                     value = selectedCountry.label,
                     onValueChange = {},
                     readOnly = true,
                     enabled = !isBusy,
+                    singleLine = true,
                     label = { Text("区号") },
                     trailingIcon = {
                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                     },
-                    modifier = Modifier.weight(0.45f)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it.filter { c -> c.isDigit() } },
-                    enabled = !isBusy,
-                    singleLine = true,
-                    label = { Text("手机号") },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier.weight(0.55f)
-                )
-            }
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                COUNTRY_CODES.forEach { country ->
-                    DropdownMenuItem(
-                        text = { Text(country.label) },
-                        onClick = {
-                            selectedCountry = country
-                            expanded = false
-                        }
-                    )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    COUNTRY_CODES.forEach { country ->
+                        DropdownMenuItem(
+                            text = { Text(country.label) },
+                            onClick = {
+                                selectedCountry = country
+                                expanded = false
+                            }
+                        )
+                    }
                 }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = it.filter { c -> c.isDigit() } },
+                enabled = !isBusy,
+                singleLine = true,
+                label = { Text("手机号") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Next
+                ),
+                modifier = Modifier.weight(0.55f)
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -573,18 +595,29 @@ private fun BiliClientButton() {
 }
 
 private fun launchBiliClient(context: Context) {
-    val biliPackage = "tv.danmaku.bili"
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(biliPackage)
-    if (launchIntent != null) {
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(launchIntent)
-    } else {
-        // 未安装 B站 App：打开官网下载页
-        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://app.bilibili.com")).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    // bilibili 在国内/国际/概念版有多个包名，逐一尝试
+    val biliPackages = listOf(
+        "tv.danmaku.bili",             // 国内版
+        "tv.danmaku.bilibilimirror",   // 概念版
+        "com.bilibili.app.in",         // 国际版
+        "com.bilibili.app.blue"        // 蓝色版
+    )
+
+    for (pkg in biliPackages) {
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(launchIntent) }
+                .onFailure { it.printStackTrace() }
+            return
         }
-        runCatching { context.startActivity(webIntent) }
     }
+
+    // 都没安装：打开官网下载页
+    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://app.bilibili.com")).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(webIntent) }
 }
 
 /**

@@ -50,6 +50,7 @@ fun FavoriteScreen(
     val folders by favoriteViewModel.folders.collectAsState()
     val isLoading by favoriteViewModel.isLoadingFolders.collectAsState()
     val userInfo by authViewModel.userInfo.collectAsState()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
 
     Scaffold(
         topBar = {
@@ -102,6 +103,38 @@ fun FavoriteScreen(
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.material3.CircularProgressIndicator()
+            }
+        } else if (!isLoggedIn) {
+            // 跳过登录的用户：提示需要登录才能访问收藏夹
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "未登录",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "登录B站账号后即可查看收藏夹",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         } else if (folders.isEmpty()) {
             Box(

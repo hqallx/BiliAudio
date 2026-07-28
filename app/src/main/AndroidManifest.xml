@@ -9,6 +9,19 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Android 11+ 包可见性：允许查询是否已安装 B站 App -->
+    <queries>
+        <package android:name="tv.danmaku.bili" />
+        <package android:name="tv.danmaku.bilibilimirror" />
+        <package android:name="com.bilibili.app.in" />
+        <package android:name="com.bilibili.app.blue" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:name=".BiliAudioApp"
         android:allowBackup="true"
