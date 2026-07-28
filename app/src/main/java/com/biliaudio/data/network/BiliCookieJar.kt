@@ -22,7 +22,12 @@ class BiliCookieJar(context: Context) : CookieJar {
 
     init {
         restore()
-        ensureBuvid3()
+        try {
+            ensureBuvid3()
+        } catch (e: Throwable) {
+            // buvid3 生成失败不应阻塞应用启动
+            e.printStackTrace()
+        }
     }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {

@@ -101,8 +101,12 @@ fun LoginScreen(
 
     var selectedTab by remember { mutableStateOf(LoginTab.QrCode) }
 
-    if (isLoggedIn) {
-        onLoginSuccess()
+    // 登录成功回调必须在副作用中执行，不能在组合过程中直接调用导航
+    // 否则会触发 "Navigating during composition" 异常导致闪退
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            onLoginSuccess()
+        }
     }
 
     Column(
