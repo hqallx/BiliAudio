@@ -47,6 +47,7 @@ import com.biliaudio.ui.screens.LoginScreen
 import com.biliaudio.ui.screens.PlaylistScreen
 import com.biliaudio.ui.screens.ProfileScreen
 import com.biliaudio.ui.screens.VideoListScreen
+import com.biliaudio.ui.screens.WebViewLoginScreen
 import com.biliaudio.ui.theme.BiliAudioTheme
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
@@ -205,7 +206,22 @@ fun AppRoot(
                             navController.navigate("favorite") {
                                 popUpTo(0) { inclusive = true }
                             }
+                        },
+                        onNavigateToWebViewLogin = {
+                            navController.navigate("webview-login")
                         }
+                    )
+                }
+
+                composable("webview-login") {
+                    WebViewLoginScreen(
+                        authViewModel = authViewModel,
+                        onLoginSuccess = {
+                            navController.navigate("favorite") {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        },
+                        onBack = { navController.popBackStack() }
                     )
                 }
 

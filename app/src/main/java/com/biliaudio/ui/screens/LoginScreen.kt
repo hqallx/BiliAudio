@@ -1,10 +1,6 @@
 package com.biliaudio.ui.screens
 
-import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -56,7 +52,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -92,7 +87,8 @@ private val COUNTRY_CODES = listOf(
 @Composable
 fun LoginScreen(
     authViewModel: AuthViewModel = hiltViewModel(),
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    onNavigateToWebViewLogin: () -> Unit = {}
 ) {
     val loginStatus by authViewModel.loginStatus.collectAsState()
     val qrCodeUrl by authViewModel.qrCodeUrl.collectAsState()
@@ -202,12 +198,10 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 用 B站 App 直接授权登录：打开二维码接口返回的 url，
-            // B站 App 通过 App Links 拦截该 passport.bilibili.com 链接，
-            // 直接弹出授权确认界面（无需扫码）。
+            // B站授权登录：在应用内 WebView 中打开 B站官方登录页，
+            // 用户完成登录后自动捕获 Cookie 完成授权。
             BiliClientButton(
-                qrCodeUrl = qrCodeUrl,
-                onGenerate = { authViewModel.generateQrCode() }
+                onClick = onNavigateToWebViewLogin
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -575,38 +569,15 @@ private fun SmsContent(
 }
 
 /**
- * 用 B站 App 直接授权登录按钮。
- *
- * 实现方式（参考 BBPlayer）：打开二维码接口返回的 url（passport.bilibili.com
- * 的 HTTPS 链接）。已安装的 B站 App 通过 App Links 拦截该链接，直接弹出
- * 授权确认界面，用户点确认后本应用的二维码轮询即检测到登录成功——全程无需扫码。
- *
- * 若未安装 B站 App，系统浏览器会打开该链接进行网页端确认。
- *
- * @param qrCodeUrl 二维码接口返回的登录链接；为空时先触发 onGenerate 生成
- * @param onGenerate qrCodeUrl 为空时回调，用于生成二维码
+ * B站授权登录按钮：导航到应用内 WebView 登录页面。
+ * 用户在 B站官方登录页完成登录后，自动捕获 Cookie 完成授权。
  */
 @Composable
 private fun BiliClientButton(
-    qrCodeUrl: String?,
-    onGenerate: () -> Unit
+    onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     OutlinedButton(
-        onClick = {
-            val url = qrCodeUrl
-            if (url.isNullOrEmpty()) {
-                // 还没生成二维码：先生成，提示用户稍候再点
-                onGenerate()
-                Toast.makeText(
-                    context,
-                    "正在生成二维码，请稍候再次点击此按钮",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                openBiliAuthorization(context, url)
-            }
-        },
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
@@ -619,30 +590,10 @@ private fun BiliClientButton(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "用B站App授权登录",
+            text = "通过B站客户端授权登录",
             style = MaterialTheme.typography.titleSmall
         )
     }
-}
-
-/**
- * 通过 ACTION_VIEW 打开二维码登录链接。
- * B站 App（若已安装）会通过 App Links 拦截 passport.bilibili.com 链接，
- * 直接显示授权确认界面；否则由系统浏览器打开网页端确认。
- */
-private fun openBiliAuthorization(context: Context, url: String) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    runCatching { context.startActivity(intent) }
-        .onFailure {
-            it.printStackTrace()
-            Toast.makeText(
-                context,
-                "无法打开授权页面，请确认已安装B站App或浏览器",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
 }
 
 /**

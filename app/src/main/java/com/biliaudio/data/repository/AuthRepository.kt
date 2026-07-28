@@ -85,6 +85,17 @@ class AuthRepository @Inject constructor(
         cookieJar.clearCookies()
     }
 
+    /**
+     * 从 WebView CookieManager 同步 Cookie 到 OkHttp CookieJar。
+     * 用于 WebView 登录成功后，将 B站下发的登录 Cookie 同步到网络层。
+     */
+    fun syncCookiesFromWebView(cookieString: String) {
+        val cookies = CookieHelper.parseCookies(cookieString)
+        if (cookies.isNotEmpty()) {
+            cookieJar.mergeCookies(cookies)
+        }
+    }
+
     fun isLoggedIn(): Boolean {
         return CookieHelper.hasLoginCookies(cookieJar.getAllCookies())
     }

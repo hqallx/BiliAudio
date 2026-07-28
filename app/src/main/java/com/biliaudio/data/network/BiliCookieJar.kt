@@ -70,6 +70,20 @@ class BiliCookieJar(context: Context) : CookieJar {
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
+    /**
+     * 合并 Cookie（不清除已有的，同 name 覆盖）。
+     * 用于 WebView 登录后将 CookieManager 的 Cookie 同步到 OkHttp CookieJar。
+     */
+    fun mergeCookies(cookies: List<Cookie>) {
+        val store = cookieStore.getOrPut("bilibili.com") { mutableListOf() }
+        for (incoming in cookies) {
+            store.removeAll { it.name == incoming.name }
+            store.add(incoming)
+        }
+        persist()
+        onCookiesUpdated?.invoke(getAllCookies())
+    }
+
     fun getAllCookies(): List<Cookie> = cookieStore.values.flatten()
 
     fun clearCookies() {

@@ -366,6 +366,20 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * WebView 登录完成回调：将 WebView 中的 Cookie 同步到 OkHttp CookieJar，
+     * 然后设置登录状态并加载用户信息。
+     */
+    fun onWebViewLoginCompleted(cookieString: String) {
+        if (_isLoggedIn.value) return
+        authRepository.syncCookiesFromWebView(cookieString)
+        if (authRepository.isLoggedIn()) {
+            _isLoggedIn.value = true
+            _loginStatus.value = LoginStatus.Success
+            loadUserInfo()
+        }
+    }
+
     fun refreshQrCode() {
         pollJob?.cancel()
         generateQrCode()
