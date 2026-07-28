@@ -116,9 +116,12 @@ fun LoginScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 右上角「跳过」按钮：进入无登录态浏览（仅展示已下载内容）
+        // 右上角「跳过」按钮：进入游客模式浏览
         TextButton(
-            onClick = { onLoginSuccess() },
+            onClick = {
+                authViewModel.enterGuestMode()
+                onLoginSuccess()
+            },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
@@ -202,9 +205,13 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 跳转 B站客户端按钮：让用户在 B站 App 内登录后，
-            // 回到本应用用扫码登录（用 B站 App 扫下方二维码）
-            BiliClientButton()
+            // 用 B站 App 直接授权登录：打开二维码接口返回的 url，
+            // B站 App 通过 App Links 拦截该 passport.bilibili.com 链接，
+            // 直接弹出授权确认界面（无需扫码）。
+            BiliClientButton(
+                qrCodeUrl = qrCodeUrl,
+                onGenerate = { authViewModel.generateQrCode() }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -571,15 +578,38 @@ private fun SmsContent(
 }
 
 /**
- * 跳转 B站客户端按钮。
- * 如果已安装 B站 App 则打开它，并提示用户使用 B站 App 的扫码功能扫描上方二维码完成登录；
- * 如果未安装，则打开 B站网页登录页。
+ * 用 B站 App 直接授权登录按钮。
+ *
+ * 实现方式（参考 BBPlayer）：打开二维码接口返回的 url（passport.bilibili.com
+ * 的 HTTPS 链接）。已安装的 B站 App 通过 App Links 拦截该链接，直接弹出
+ * 授权确认界面，用户点确认后本应用的二维码轮询即检测到登录成功——全程无需扫码。
+ *
+ * 若未安装 B站 App，系统浏览器会打开该链接进行网页端确认。
+ *
+ * @param qrCodeUrl 二维码接口返回的登录链接；为空时先触发 onGenerate 生成
+ * @param onGenerate qrCodeUrl 为空时回调，用于生成二维码
  */
 @Composable
-private fun BiliClientButton() {
+private fun BiliClientButton(
+    qrCodeUrl: String?,
+    onGenerate: () -> Unit
+) {
     val context = LocalContext.current
     OutlinedButton(
-        onClick = { launchBiliClient(context) },
+        onClick = {
+            val url = qrCodeUrl
+            if (url.isNullOrEmpty()) {
+                // 还没生成二维码：先生成，提示用户稍候再点
+                onGenerate()
+                Toast.makeText(
+                    context,
+                    "正在生成二维码，请稍候再次点击此按钮",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                openBiliAuthorization(context, url)
+            }
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
@@ -591,47 +621,30 @@ private fun BiliClientButton() {
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "打开B站客户端扫码", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = "用B站App授权登录",
+            style = MaterialTheme.typography.titleSmall
+        )
     }
 }
 
-private fun launchBiliClient(context: Context) {
-    // bilibili 在国内/国际/概念版有多个包名，逐一尝试
-    val biliPackages = listOf(
-        "tv.danmaku.bili",             // 国内版
-        "tv.danmaku.bilibilimirror",   // 概念版
-        "com.bilibili.app.in",         // 国际版
-        "com.bilibili.app.blue"        // 蓝色版
-    )
-
-    for (pkg in biliPackages) {
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
-        if (launchIntent != null) {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { context.startActivity(launchIntent) }
-                .onFailure {
-                    it.printStackTrace()
-                    Toast.makeText(context, "无法打开B站客户端", Toast.LENGTH_SHORT).show()
-                }
-            // 提示用户在 B站 App 中使用扫码功能扫描上方二维码
-            Toast.makeText(
-                context,
-                "请在B站App中点击首页右上角扫一扫，扫描上方二维码登录",
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-    }
-
-    // 未安装 B站客户端：打开 B站网页登录页
-    Toast.makeText(context, "未安装B站客户端，已打开网页登录", Toast.LENGTH_SHORT).show()
-    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://passport.bilibili.com/login")).apply {
+/**
+ * 通过 ACTION_VIEW 打开二维码登录链接。
+ * B站 App（若已安装）会通过 App Links 拦截 passport.bilibili.com 链接，
+ * 直接显示授权确认界面；否则由系统浏览器打开网页端确认。
+ */
+private fun openBiliAuthorization(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    runCatching { context.startActivity(webIntent) }
+    runCatching { context.startActivity(intent) }
         .onFailure {
             it.printStackTrace()
-            Toast.makeText(context, "无法打开浏览器，请手动安装B站客户端", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "无法打开授权页面，请确认已安装B站App或浏览器",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 }
 

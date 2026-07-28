@@ -77,8 +77,19 @@ fun GeeTestDialog(
             captchaObj.appendTo('#captcha');
             captchaObj.onSuccess(function() {
               var r = captchaObj.getValidate();
-              if (r) {
-                Android.onSuccess(r.geetest_challenge, r.geetest_validate, r.geetest_seccode);
+              // 必须检查每个字段是否存在且非空。
+              // @JavascriptInterface 会把 JS 的 undefined 转为 Java 字符串 "undefined"，
+              // 导致 bilibili API 收到无效的验证码参数，返回"验证码错误"。
+              if (r && r.geetest_challenge && r.geetest_validate && r.geetest_seccode) {
+                var challenge = String(r.geetest_challenge);
+                var validate = String(r.geetest_validate);
+                var seccode = String(r.geetest_seccode);
+                // GeeTest v3 的 seccode 格式应为 "validate|jordan"，
+                // 某些 SDK 版本可能不追加后缀，需手动补全
+                if (seccode.indexOf('|') === -1) {
+                  seccode = validate + '|jordan';
+                }
+                Android.onSuccess(challenge, validate, seccode);
               } else {
                 Android.onError();
               }

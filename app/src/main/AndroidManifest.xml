@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Android 11+ 包可见性：允许查询是否已安装 B站 App -->
+    <!-- Android 11+ 包可见性：允许查询是否已安装 B站 App，以及 bilibili:// 深链解析 -->
     <queries>
         <package android:name="tv.danmaku.bili" />
         <package android:name="tv.danmaku.bilibilimirror" />
@@ -19,6 +19,11 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="bilibili" />
         </intent>
     </queries>
 

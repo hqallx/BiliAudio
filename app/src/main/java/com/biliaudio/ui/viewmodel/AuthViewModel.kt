@@ -43,6 +43,14 @@ class AuthViewModel @Inject constructor(
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    /** 游客模式：用户点击"跳过"进入无登录浏览。 */
+    private val _isGuestMode = MutableStateFlow(false)
+    val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
+
+    /** 是否可以浏览内容（已登录或游客模式）。 */
+    val canBrowse: Boolean
+        get() = _isLoggedIn.value || _isGuestMode.value
+
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
@@ -225,6 +233,12 @@ class AuthViewModel @Inject constructor(
             _smsLoginStep.value = SmsLoginStep.Error("验证码状态错误")
             return
         }
+        // 校验 GeeTest 结果：validate 和 seccode 不能为空
+        // （JS 端已过滤 undefined，这里做二次保护）
+        if (gee.validate.isBlank() || gee.seccode.isBlank()) {
+            _smsLoginStep.value = SmsLoginStep.Error("滑块验证失败，请重试")
+            return
+        }
 
         viewModelScope.launch {
             _smsLoginStep.value = SmsLoginStep.SendingSms
@@ -353,11 +367,17 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /** 跳过登录，进入游客浏览模式。 */
+    fun enterGuestMode() {
+        _isGuestMode.value = true
+    }
+
     fun logout() {
         viewModelScope.launch {
             authRepository.clearCookies()
             preferencesManager.clearAll()
             _isLoggedIn.value = false
+            _isGuestMode.value = false
             _userInfo.value = null
             _loginStatus.value = LoginStatus.Idle
             _smsLoginStep.value = SmsLoginStep.Idle

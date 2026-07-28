@@ -49,6 +49,8 @@ fun ProfileScreen(
     onLogout: () -> Unit = {}
 ) {
     val userInfo by authViewModel.userInfo.collectAsState()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val isGuestMode by authViewModel.isGuestMode.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -103,18 +105,30 @@ fun ProfileScreen(
 
                     Column {
                         Text(
-                            text = userInfo?.name ?: "未登录",
+                            text = when {
+                                isLoggedIn -> userInfo?.name ?: "已登录"
+                                isGuestMode -> "游客模式"
+                                else -> "未登录"
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        userInfo?.sign?.let {
-                            Text(
-                                text = it.ifEmpty { "这个人很懒，什么都没有写" },
+                        when {
+                            isLoggedIn -> userInfo?.sign?.let {
+                                Text(
+                                    text = it.ifEmpty { "这个人很懒，什么都没有写" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                    maxLines = 2
+                                )
+                            }
+                            isGuestMode -> Text(
+                                text = "登录后可同步B站收藏夹",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                                maxLines = 2
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
+                            else -> {}
                         }
                     }
                 }
@@ -151,12 +165,21 @@ fun ProfileScreen(
                         subtitle = "BiliAudio v1.0"
                     )
 
-                    SettingsItem(
-                        icon = Icons.Default.ExitToApp,
-                        title = "退出登录",
-                        subtitle = "清除本地登录状态",
-                        onClick = { showLogoutDialog = true }
-                    )
+                    if (isLoggedIn) {
+                        SettingsItem(
+                            icon = Icons.Default.ExitToApp,
+                            title = "退出登录",
+                            subtitle = "清除本地登录状态",
+                            onClick = { showLogoutDialog = true }
+                        )
+                    } else if (isGuestMode) {
+                        SettingsItem(
+                            icon = Icons.Default.ExitToApp,
+                            title = "去登录",
+                            subtitle = "登录B站账号以同步收藏夹",
+                            onClick = { onLogout() }
+                        )
+                    }
                 }
             }
         }

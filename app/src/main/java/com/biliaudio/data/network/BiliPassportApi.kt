@@ -50,7 +50,8 @@ interface BiliPassportApi {
         @Field("gee_seccode") geeSeccode: String,
         @Field("gee_validate") geeValidate: String,
         @Field("gee_challenge") geeChallenge: String,
-        @Field("buvid3") buvid3: String
+        @Field("buvid3") buvid3: String,
+        @Field("go_url") goUrl: String = "https://www.bilibili.com"
     ): BiliResponse<SmsSendResponse>
 
     /**

@@ -87,6 +87,7 @@ fun AppRoot(
     val navController = rememberNavController()
 
     val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val isGuestMode by authViewModel.isGuestMode.collectAsStateWithLifecycle()
     val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     val currentPosition by playerViewModel.currentPosition.collectAsStateWithLifecycle()
@@ -141,7 +142,7 @@ fun AppRoot(
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentDestination?.hierarchy?.any { destination ->
         items.any { it.route == destination.route }
-    } == true && isLoggedIn
+    } == true && (isLoggedIn || isGuestMode)
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -195,7 +196,7 @@ fun AppRoot(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = if (isLoggedIn) "favorite" else "login"
+                startDestination = if (isLoggedIn || isGuestMode) "favorite" else "login"
             ) {
                 composable("login") {
                     LoginScreen(
