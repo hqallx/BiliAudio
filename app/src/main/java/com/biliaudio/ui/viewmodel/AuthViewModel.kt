@@ -130,6 +130,13 @@ class AuthViewModel @Inject constructor(
                                 break
                             }
                             BiliConstants.QrCodeStatus.SUCCESS -> {
+                                // 二维码登录成功：从返回的 url 中提取并保存登录 Cookie。
+                                // bilibili 的 poll 接口在成功时把 SESSDATA / DedeUserID 等
+                                // 放在 data.url 查询参数中，不主动提取则登录态未真正建立。
+                                val loginUrl = result.data.data?.url
+                                if (!loginUrl.isNullOrEmpty()) {
+                                    authRepository.saveQrLoginCookies(loginUrl)
+                                }
                                 _loginStatus.value = LoginStatus.Success
                                 _isLoggedIn.value = true
                                 loadUserInfo()

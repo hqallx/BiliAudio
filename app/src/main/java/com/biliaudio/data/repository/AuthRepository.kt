@@ -39,6 +39,23 @@ class AuthRepository @Inject constructor(
         passportApi.checkQrCodeStatus(qrcodeKey)
     }
 
+    /**
+     * 二维码登录成功后，从返回的 url 中提取登录 Cookie 并保存。
+     *
+     * bilibili 的二维码 poll 接口在登录成功时，返回的 data.url 是一个
+     * crossDomain 跳转链接，形如：
+     * https://passport.biligame.com/x/passport-login/web/crossDomain?DedeUserID=xxx&SESSDATA=xxx&bili_jct=xxx&...
+     * 登录所需的 Cookie（SESSDATA / DedeUserID / bili_jct 等）以查询参数形式
+     * 附带在 URL 中，而非通过 Set-Cookie 响应头下发。
+     * 如果不主动提取并保存，登录态实际上没有建立，后续所有需要登录的接口都会失败。
+     */
+    fun saveQrLoginCookies(url: String) {
+        val cookies = CookieHelper.extractCookiesFromUrl(url)
+        if (cookies.isNotEmpty()) {
+            cookieJar.setCookies(cookies)
+        }
+    }
+
     // ============ 短信登录 ============
 
     suspend fun getCaptcha(): Result<BiliResponse<CaptchaResponse>> = resultOf {
@@ -51,13 +68,15 @@ class AuthRepository @Inject constructor(
         captcha: CaptchaResponse,
         geeTestResult: GeeTestResult
     ): Result<BiliResponse<SmsSendResponse>> = resultOf {
+        val buvid3 = CookieHelper.getCookieValue(cookieJar.getAllCookies(), "buvid3") ?: ""
         passportApi.sendSmsCode(
             cid = cid,
             tel = tel,
             recaptchaToken = captcha.recaptchaToken,
             geeSeccode = geeTestResult.seccode,
             geeValidate = geeTestResult.validate,
-            geeChallenge = geeTestResult.challenge
+            geeChallenge = geeTestResult.challenge,
+            buvid3 = buvid3
         )
     }
 
@@ -69,6 +88,7 @@ class AuthRepository @Inject constructor(
         captcha: CaptchaResponse,
         geeTestResult: GeeTestResult
     ): Result<BiliResponse<SmsLoginResponse>> = resultOf {
+        val buvid3 = CookieHelper.getCookieValue(cookieJar.getAllCookies(), "buvid3") ?: ""
         passportApi.loginWithSms(
             cid = cid,
             tel = tel,
@@ -77,7 +97,8 @@ class AuthRepository @Inject constructor(
             recaptchaToken = captcha.recaptchaToken,
             geeSeccode = geeTestResult.seccode,
             geeValidate = geeTestResult.validate,
-            geeChallenge = geeTestResult.challenge
+            geeChallenge = geeTestResult.challenge,
+            buvid3 = buvid3
         )
     }
 

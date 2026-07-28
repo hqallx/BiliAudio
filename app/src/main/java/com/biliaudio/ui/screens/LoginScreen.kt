@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -571,8 +572,8 @@ private fun SmsContent(
 
 /**
  * 跳转 B站客户端按钮。
- * 如果已安装 B站 App 则打开它（用户可在 App 内登录或扫描本应用的二维码）；
- * 否则打开应用商店/官网。
+ * 如果已安装 B站 App 则打开它，并提示用户使用 B站 App 的扫码功能扫描上方二维码完成登录；
+ * 如果未安装，则打开 B站网页登录页。
  */
 @Composable
 private fun BiliClientButton() {
@@ -590,7 +591,7 @@ private fun BiliClientButton() {
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "打开B站客户端", style = MaterialTheme.typography.titleSmall)
+        Text(text = "打开B站客户端扫码", style = MaterialTheme.typography.titleSmall)
     }
 }
 
@@ -608,16 +609,30 @@ private fun launchBiliClient(context: Context) {
         if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             runCatching { context.startActivity(launchIntent) }
-                .onFailure { it.printStackTrace() }
+                .onFailure {
+                    it.printStackTrace()
+                    Toast.makeText(context, "无法打开B站客户端", Toast.LENGTH_SHORT).show()
+                }
+            // 提示用户在 B站 App 中使用扫码功能扫描上方二维码
+            Toast.makeText(
+                context,
+                "请在B站App中点击首页右上角扫一扫，扫描上方二维码登录",
+                Toast.LENGTH_LONG
+            ).show()
             return
         }
     }
 
-    // 都没安装：打开官网下载页
-    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://app.bilibili.com")).apply {
+    // 未安装 B站客户端：打开 B站网页登录页
+    Toast.makeText(context, "未安装B站客户端，已打开网页登录", Toast.LENGTH_SHORT).show()
+    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://passport.bilibili.com/login")).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     runCatching { context.startActivity(webIntent) }
+        .onFailure {
+            it.printStackTrace()
+            Toast.makeText(context, "无法打开浏览器，请手动安装B站客户端", Toast.LENGTH_SHORT).show()
+        }
 }
 
 /**

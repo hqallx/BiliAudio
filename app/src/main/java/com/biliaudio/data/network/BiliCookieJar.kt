@@ -21,7 +21,15 @@ class BiliCookieJar(context: Context) : CookieJar {
     var onCookiesUpdated: ((List<Cookie>) -> Unit)? = null
 
     init {
-        restore()
+        try {
+            restore()
+        } catch (e: Throwable) {
+            // Cookie 恢复失败不应阻塞应用启动。
+            // 清除损坏的 Cookie 数据，避免下次启动再次崩溃。
+            e.printStackTrace()
+            prefs.edit().remove("cookies").apply()
+            cookieStore.clear()
+        }
         try {
             ensureBuvid3()
         } catch (e: Throwable) {
@@ -59,7 +67,7 @@ class BiliCookieJar(context: Context) : CookieJar {
         cookieStore["bilibili.com"] = cookies.toMutableList()
         ensureBuvid3()
         persist()
-        onCookiesUpdated?.invoke(cookies)
+        onCookiesUpdated?.invoke(getAllCookies())
     }
 
     fun getAllCookies(): List<Cookie> = cookieStore.values.flatten()

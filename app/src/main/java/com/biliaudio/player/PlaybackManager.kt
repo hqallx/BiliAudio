@@ -70,8 +70,13 @@ class PlaybackManager @Inject constructor(
     fun connectController(sessionToken: SessionToken) {
         val future = MediaController.Builder(context, sessionToken).buildAsync()
         future.addListener({
-            mediaController = future.get()
-            mediaController?.addListener(playerListener)
+            try {
+                mediaController = future.get()
+                mediaController?.addListener(playerListener)
+            } catch (e: Exception) {
+                // MediaController 连接失败不应导致应用崩溃
+                e.printStackTrace()
+            }
         }, MoreExecutors.directExecutor())
     }
 
