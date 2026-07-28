@@ -61,30 +61,48 @@ class AuthViewModel @Inject constructor(
     private var captcha: CaptchaResponse? = null
     private var geeTestResult: GeeTestResult? = null
     private var smsCaptchaKey: String? = null
-    private var pendingCid: String = "86"
+    // bilibili 国际代码 ID：1=中国大陆（不是区号86）
+    private var pendingCid: String = "1"
     private var pendingTel: String = ""
     private var countdownJob: Job? = null
 
     private var pollJob: Job? = null
 
     init {
-        // 应用启动时检查 Cookie 是否有效
-        viewModelScope.launch {
-            val hasLogin = authRepository.isLoggedIn()
-            _isLoggedIn.value = hasLogin
-            if (hasLogin) {
-                loadUserInfo()
-            }
-        }
-
-        // 监听 Cookie 更新（扫码/短信登录成功时触发）
-        authRepository.onCookiesUpdated = { cookies ->
+        // 应用启动时检查 Cookie 是否有效。
+        // 整个 init 用 try-catch 包裹，防止任何异常导致 ViewModel 创建失败
+        // 进而触发 Hilt 崩溃（表现为「杀进程重进闪退」）。
+        try {
             viewModelScope.launch {
-                if (CookieHelper.hasLoginCookies(cookies)) {
-                    _isLoggedIn.value = true
-                    loadUserInfo()
+                try {
+                    val hasLogin = authRepository.isLoggedIn()
+                    _isLoggedIn.value = hasLogin
+                    if (hasLogin) {
+                        // 从持久化的 Cookie 中恢复基本用户信息（mid），
+                        // 即使 nav 接口暂时失败也能在「我的」页面显示已登录
+                        restoreBasicUserInfo()
+                        loadUserInfo()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
+
+            // 监听 Cookie 更新（扫码/短信登录成功时触发）
+            authRepository.onCookiesUpdated = { cookies ->
+                viewModelScope.launch {
+                    try {
+                        if (CookieHelper.hasLoginCookies(cookies)) {
+                            _isLoggedIn.value = true
+                            loadUserInfo()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -92,25 +110,31 @@ class AuthViewModel @Inject constructor(
 
     fun generateQrCode() {
         viewModelScope.launch {
-            _loginStatus.value = LoginStatus.Loading
-            when (val result = authRepository.generateQrCode()) {
-                is Result.Success -> {
-                    val response = result.data
-                    if (response.code == 0 && response.data != null) {
-                        _qrCodeUrl.value = response.data.url
-                        _qrCodeKey.value = response.data.qrcodeKey
-                        _loginStatus.value = LoginStatus.QrCodeReady
-                        startPolling()
-                    } else {
-                        _loginStatus.value = LoginStatus.Error(response.message)
-                        _toast.value = response.message
+            try {
+                _loginStatus.value = LoginStatus.Loading
+                when (val result = authRepository.generateQrCode()) {
+                    is Result.Success -> {
+                        val response = result.data
+                        if (response.code == 0 && response.data != null) {
+                            _qrCodeUrl.value = response.data.url
+                            _qrCodeKey.value = response.data.qrcodeKey
+                            _loginStatus.value = LoginStatus.QrCodeReady
+                            startPolling()
+                        } else {
+                            _loginStatus.value = LoginStatus.Error(response.message)
+                            _toast.value = response.message
+                        }
                     }
+                    is Result.Error -> {
+                        _loginStatus.value = LoginStatus.Error(result.message)
+                        _toast.value = result.message
+                    }
+                    Result.Loading -> {}
                 }
-                is Result.Error -> {
-                    _loginStatus.value = LoginStatus.Error(result.message)
-                    _toast.value = result.message
-                }
-                Result.Loading -> {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _loginStatus.value = LoginStatus.Error(e.message ?: "生成二维码失败")
+                _toast.value = e.message ?: "生成二维码失败"
             }
         }
     }
@@ -121,34 +145,47 @@ class AuthViewModel @Inject constructor(
 
         pollJob = viewModelScope.launch {
             while (true) {
-                delay(BiliConstants.QR_CODE_POLL_INTERVAL_MS)
-                when (val result = authRepository.checkQrCodeStatus(qrKey)) {
-                    is Result.Success -> {
-                        when (result.data.data?.code) {
-                            BiliConstants.QrCodeStatus.EXPIRED -> {
-                                _loginStatus.value = LoginStatus.Expired
-                                break
-                            }
-                            BiliConstants.QrCodeStatus.SUCCESS -> {
-                                // 二维码登录成功：登录 Cookie 已由 OkHttp CookieJar
-                                // 从 Set-Cookie 响应头自动捕获（照搬 BBPlayer）。
-                                _loginStatus.value = LoginStatus.Success
-                                _isLoggedIn.value = true
-                                loadUserInfo()
-                                break
-                            }
-                            BiliConstants.QrCodeStatus.SCANNED_WAITING_CONFIRM -> {
-                                _loginStatus.value = LoginStatus.Scanned
-                            }
-                            BiliConstants.QrCodeStatus.WAITING_FOR_SCAN -> {
-                                _loginStatus.value = LoginStatus.QrCodeReady
+                try {
+                    delay(BiliConstants.QR_CODE_POLL_INTERVAL_MS)
+                    when (val result = authRepository.checkQrCodeStatus(qrKey)) {
+                        is Result.Success -> {
+                            when (result.data.data?.code) {
+                                BiliConstants.QrCodeStatus.EXPIRED -> {
+                                    _loginStatus.value = LoginStatus.Expired
+                                    break
+                                }
+                                BiliConstants.QrCodeStatus.SUCCESS -> {
+                                    // WEB 二维码登录成功：登录 Cookie（SESSDATA/DedeUserID/
+                                    // bili_jct）位于 data.url 的 crossDomain 链接查询参数中。
+                                    // Set-Cookie 响应头不一定包含这些 Cookie，必须从 URL 提取。
+                                    val loginUrl = result.data.data?.url
+                                    if (!loginUrl.isNullOrEmpty()) {
+                                        authRepository.saveCookiesFromLoginUrl(loginUrl)
+                                    }
+                                    _loginStatus.value = LoginStatus.Success
+                                    _isLoggedIn.value = true
+                                    // 延迟 500ms 再加载用户信息，确保 Cookie 已持久化
+                                    // 且服务端登录态已生效，避免 nav 接口偶发返回未登录
+                                    delay(500)
+                                    loadUserInfo()
+                                    break
+                                }
+                                BiliConstants.QrCodeStatus.SCANNED_WAITING_CONFIRM -> {
+                                    _loginStatus.value = LoginStatus.Scanned
+                                }
+                                BiliConstants.QrCodeStatus.WAITING_FOR_SCAN -> {
+                                    _loginStatus.value = LoginStatus.QrCodeReady
+                                }
                             }
                         }
+                        is Result.Error -> {
+                            // 网络错误时继续轮询
+                        }
+                        Result.Loading -> {}
                     }
-                    is Result.Error -> {
-                        // 网络错误时继续轮询
-                    }
-                    Result.Loading -> {}
+                } catch (e: Exception) {
+                    // 单次轮询异常不应中断整个轮询循环
+                    e.printStackTrace()
                 }
             }
         }
@@ -324,59 +361,89 @@ class AuthViewModel @Inject constructor(
 
     // ============ 通用 ============
 
+    /**
+     * 从持久化 Cookie 中恢复基本用户信息（mid）。
+     * 在 nav 接口不可达或返回未登录时作为兜底，确保「我的」页面不会误显示「未登录」。
+     */
+    private fun restoreBasicUserInfo() {
+        try {
+            val mid = authRepository.getCurrentUserId()
+            if (mid != null && mid > 0 && _userInfo.value == null) {
+                _userInfo.value = UserInfo(
+                    mid = mid,
+                    name = "已登录用户",
+                    face = "",
+                    sign = "",
+                    level = 0
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun loadUserInfo() {
         viewModelScope.launch {
-            when (val result = authRepository.getUserInfo()) {
-                is Result.Success -> {
-                    val response = result.data
-                    if (response.code == 0 && response.data != null) {
-                        _userInfo.value = response.data
-                        preferencesManager.saveUserInfo(
-                            id = response.data.mid.toString(),
-                            name = response.data.name,
-                            avatar = response.data.face
-                        )
+            try {
+                when (val result = authRepository.getUserInfo()) {
+                    is Result.Success -> {
+                        val userInfo = result.data
+                        if (userInfo != null) {
+                            // nav 明确返回 isLogin=true：更新完整用户信息
+                            _userInfo.value = userInfo
+                            preferencesManager.saveUserInfo(
+                                id = userInfo.mid.toString(),
+                                name = userInfo.name,
+                                avatar = userInfo.face
+                            )
+                        } else {
+                            // nav 返回 isLogin=false 或 code!=0：
+                            // 不立即登出！Cookie 可能仍在生效（接口偶发失败、
+                            // 风控拦截等）。保持 isLoggedIn=true（基于 Cookie 存在），
+                            // 用户可手动退出登录。这是修复「我的页面显示未登录」的关键。
+                            // 仅当 _userInfo 为空时，用 Cookie 中的 mid 做兜底显示。
+                            if (_userInfo.value == null) {
+                                restoreBasicUserInfo()
+                            }
+                        }
                     }
-                }
-                is Result.Error -> {
-                    // Cookie 可能过期
-                    if (_isLoggedIn.value) {
-                        _toast.value = "登录已失效，请重新登录"
-                        logout()
+                    is Result.Error -> {
+                        // 网络异常不登出——临时网络问题不应导致用户被登出。
+                        // 用 Cookie 中的 mid 做兜底，避免「我的」页面显示未登录。
+                        if (_userInfo.value == null) {
+                            restoreBasicUserInfo()
+                        }
                     }
+                    Result.Loading -> {}
                 }
-                Result.Loading -> {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // 任何异常都不登出，用兜底信息显示
+                if (_userInfo.value == null) {
+                    restoreBasicUserInfo()
+                }
             }
         }
     }
 
     fun logout() {
         viewModelScope.launch {
-            authRepository.clearCookies()
-            preferencesManager.clearAll()
-            _isLoggedIn.value = false
-            _userInfo.value = null
-            _loginStatus.value = LoginStatus.Idle
-            _smsLoginStep.value = SmsLoginStep.Idle
-            _captchaInfo.value = null
-            _smsCountdown.value = 0
-            captcha = null
-            geeTestResult = null
-            smsCaptchaKey = null
-        }
-    }
-
-    /**
-     * WebView 登录完成回调：将 WebView 中的 Cookie 同步到 OkHttp CookieJar，
-     * 然后设置登录状态并加载用户信息。
-     */
-    fun onWebViewLoginCompleted(cookieString: String) {
-        if (_isLoggedIn.value) return
-        authRepository.syncCookiesFromWebView(cookieString)
-        if (authRepository.isLoggedIn()) {
-            _isLoggedIn.value = true
-            _loginStatus.value = LoginStatus.Success
-            loadUserInfo()
+            try {
+                authRepository.clearCookies()
+                preferencesManager.clearAll()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoggedIn.value = false
+                _userInfo.value = null
+                _loginStatus.value = LoginStatus.Idle
+                _smsLoginStep.value = SmsLoginStep.Idle
+                _captchaInfo.value = null
+                _smsCountdown.value = 0
+                captcha = null
+                geeTestResult = null
+                smsCaptchaKey = null
+            }
         }
     }
 

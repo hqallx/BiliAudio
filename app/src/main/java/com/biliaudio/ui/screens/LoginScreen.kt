@@ -1,6 +1,10 @@
 package com.biliaudio.ui.screens
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -20,7 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -52,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -68,27 +73,31 @@ private enum class LoginTab(val label: String) {
     Sms("短信登录")
 }
 
-/** 常用国家/地区区号。 */
-private data class CountryCode(val code: String, val label: String)
+/**
+ * 常用国家/地区。
+ * @param cid bilibili 国际代码 ID（SMS 接口的 cid 参数，如中国大陆=1）
+ * @param areaCode 区号（仅用于显示，如 +86）
+ * @param label 显示文本
+ */
+private data class CountryCode(val cid: String, val areaCode: String, val label: String)
 private val COUNTRY_CODES = listOf(
-    CountryCode("86", "+86 中国大陆"),
-    CountryCode("852", "+852 中国香港"),
-    CountryCode("853", "+853 中国澳门"),
-    CountryCode("886", "+886 中国台湾"),
-    CountryCode("1", "+1 美国/加拿大"),
-    CountryCode("81", "+81 日本"),
-    CountryCode("82", "+82 韩国"),
-    CountryCode("65", "+65 新加坡"),
-    CountryCode("60", "+60 马来西亚"),
-    CountryCode("1", "+1 其他")
+    CountryCode("1", "86", "+86 中国大陆"),
+    CountryCode("5", "852", "+852 中国香港"),
+    CountryCode("3", "853", "+853 中国澳门"),
+    CountryCode("2", "886", "+886 中国台湾"),
+    CountryCode("7", "1", "+1 美国/加拿大"),
+    CountryCode("9", "81", "+81 日本"),
+    CountryCode("10", "82", "+82 韩国"),
+    CountryCode("11", "65", "+65 新加坡"),
+    CountryCode("12", "60", "+60 马来西亚"),
+    CountryCode("7", "1", "+1 其他")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     authViewModel: AuthViewModel = hiltViewModel(),
-    onLoginSuccess: () -> Unit = {},
-    onNavigateToWebViewLogin: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {}
 ) {
     val loginStatus by authViewModel.loginStatus.collectAsState()
     val qrCodeUrl by authViewModel.qrCodeUrl.collectAsState()
@@ -198,12 +207,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // B站授权登录：在应用内 WebView 中打开 B站官方登录页，
-            // 用户完成登录后自动捕获 Cookie 完成授权。
-            BiliClientButton(
-                onClick = onNavigateToWebViewLogin
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
@@ -234,6 +237,7 @@ private fun QrCodeContent(
     onGenerate: () -> Unit,
     onRefresh: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -348,6 +352,46 @@ private fun QrCodeContent(
                 }
             }
         }
+
+        // 客户端授权登录：直接打开二维码 URL，B站 App 通过 App Links 拦截后
+        // 弹出授权确认页（无需扫码）。应用后台轮询检测登录成功并提取 Cookie。
+        if (loginStatus is LoginStatus.QrCodeReady ||
+            loginStatus is LoginStatus.Scanned
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = {
+                    val url = qrCodeUrl
+                    if (url.isNullOrEmpty()) {
+                        Toast.makeText(context, "请先获取二维码", Toast.LENGTH_SHORT).show()
+                    } else {
+                        openBiliClientAuth(context, url)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "在B站客户端授权",
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "同一设备可直接跳转B站App授权，无需扫码",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -454,7 +498,7 @@ private fun SmsContent(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = { onSendCode(selectedCountry.code, phone) },
+                onClick = { onSendCode(selectedCountry.cid, phone) },
                 enabled = !isBusy && phone.isNotBlank() && countdown <= 0,
                 modifier = Modifier
                     .weight(0.45f)
@@ -569,31 +613,56 @@ private fun SmsContent(
 }
 
 /**
- * B站授权登录按钮：导航到应用内 WebView 登录页面。
- * 用户在 B站官方登录页完成登录后，自动捕获 Cookie 完成授权。
+ * 跳转B站客户端进行授权登录。
+ *
+ * 优先通过 setPackage 直接拉起B站 App（tv.danmaku.bili），
+ * B站 App 会解析二维码登录 URL 并弹出「授权登录」确认页——
+ * 用户在B站 App 内点确认后，本应用后台的轮询会检测到登录成功并提取 Cookie。
+ *
+ * 若未安装B站 App，回退到系统浏览器打开该链接。
+ * 参考：BBPlayer 的 WebBrowser.openBrowserAsync(qrcodeUrl) 实现；
+ *      bilibili-API-collect 的 web 端扫码登录流程。
  */
-@Composable
-private fun BiliClientButton(
-    onClick: () -> Unit
-) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.PhoneAndroid,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "通过B站客户端授权登录",
-            style = MaterialTheme.typography.titleSmall
-        )
+private fun openBiliClientAuth(context: Context, url: String) {
+    // B站 App 包名列表（国际版/概念版等），按优先级排列
+    val biliPackages = listOf(
+        "tv.danmaku.bili",           // 哔哩哔哩（主版本）
+        "tv.danmaku.bilibilimirror", // 哔哩哔哩（镜像版）
+        "com.bilibili.app.in",       // 哔哩哔哩（国际版）
+        "com.bilibili.app.blue"      // 哔哩哔哩（概念版/蓝色版）
+    )
+
+    // 1. 优先尝试直接拉起B站 App
+    for (pkg in biliPackages) {
+        val biliIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            setPackage(pkg)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (biliIntent.resolveActivity(context.packageManager) != null) {
+            runCatching { context.startActivity(biliIntent) }
+                .onFailure {
+                    Toast.makeText(
+                        context,
+                        "打开B站客户端失败，请重试或使用扫码登录",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            return
+        }
     }
+
+    // 2. 未安装B站 App，回退到系统浏览器
+    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(browserIntent) }
+        .onFailure {
+            Toast.makeText(
+                context,
+                "无法打开授权页面，请安装B站App或使用扫码登录",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
 }
 
 /**

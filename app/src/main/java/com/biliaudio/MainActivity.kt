@@ -47,7 +47,6 @@ import com.biliaudio.ui.screens.LoginScreen
 import com.biliaudio.ui.screens.PlaylistScreen
 import com.biliaudio.ui.screens.ProfileScreen
 import com.biliaudio.ui.screens.VideoListScreen
-import com.biliaudio.ui.screens.WebViewLoginScreen
 import com.biliaudio.ui.theme.BiliAudioTheme
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
@@ -140,7 +139,8 @@ fun AppRoot(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    // 底部导航栏在非登录页（收藏/播放列表/我的）时显示，登录页不显示
+    // 底部导航栏在非登录页（收藏/播放列表/我的）时显示，登录页不显示。
+    // 跳过登录的用户仍可浏览，通过「我的」页面的「去登录」按钮回到登录页。
     val showBottomBar = currentDestination?.hierarchy?.any { destination ->
         items.any { it.route == destination.route }
     } == true
@@ -206,22 +206,7 @@ fun AppRoot(
                             navController.navigate("favorite") {
                                 popUpTo(0) { inclusive = true }
                             }
-                        },
-                        onNavigateToWebViewLogin = {
-                            navController.navigate("webview-login")
                         }
-                    )
-                }
-
-                composable("webview-login") {
-                    WebViewLoginScreen(
-                        authViewModel = authViewModel,
-                        onLoginSuccess = {
-                            navController.navigate("favorite") {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        },
-                        onBack = { navController.popBackStack() }
                     )
                 }
 

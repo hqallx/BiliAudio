@@ -19,6 +19,37 @@ data class UserInfo(
     val level: Int = 0
 )
 
+/**
+ * /x/web-interface/nav 返回的当前登录用户信息。
+ * 仅凭 Cookie 即可获取，无需 WBI 签名和 mid 参数。
+ */
+@Serializable
+data class NavInfo(
+    val isLogin: Boolean = false,
+    val mid: Long = 0,
+    val uname: String = "",
+    val face: String = "",
+    val sign: String = "",
+    val level_info: NavLevelInfo? = null
+) {
+    fun toUserInfo(): UserInfo? {
+        if (!isLogin || mid == 0L) return null
+        return UserInfo(
+            mid = mid,
+            name = uname,
+            face = face,
+            sign = sign,
+            level = level_info?.currentLevel ?: 0
+        )
+    }
+}
+
+@Serializable
+data class NavLevelInfo(
+    @SerialName("current_level")
+    val currentLevel: Int = 0
+)
+
 @Serializable
 data class FavoriteFolder(
     val id: Long,

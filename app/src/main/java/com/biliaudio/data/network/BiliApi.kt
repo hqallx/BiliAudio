@@ -6,8 +6,15 @@ import retrofit2.http.Query
 
 interface BiliApi {
 
-    @GET("x/space/wbi/acc/info")
-    suspend fun getUserInfo(): BiliResponse<UserInfo>
+    /**
+     * 获取当前登录用户信息（基于 Cookie，无需 WBI 签名和 mid 参数）。
+     *
+     * 使用 x/web-interface/nav 而非 x/space/wbi/acc/info：
+     * - 后者需要 WBI 签名 + mid 参数，缺失会返回错误导致误判「未登录」
+     * - nav 接口仅凭 Cookie 即可返回当前用户信息，适合登录态校验
+     */
+    @GET("x/web-interface/nav")
+    suspend fun getNavInfo(): BiliResponse<NavInfo>
 
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavoriteFolders(@Query("up_mid") mid: Long): BiliResponse<FavoriteListResponse>

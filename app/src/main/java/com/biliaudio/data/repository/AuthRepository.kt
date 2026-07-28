@@ -3,6 +3,7 @@ package com.biliaudio.data.repository
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.BiliResponse
 import com.biliaudio.data.model.CaptchaResponse
+import com.biliaudio.data.model.NavInfo
 import com.biliaudio.data.model.QrCodeResponse
 import com.biliaudio.data.model.QrCodeStatusData
 import com.biliaudio.data.model.SmsLoginResponse
@@ -77,8 +78,20 @@ class AuthRepository @Inject constructor(
 
     // ============ 通用 ============
 
-    suspend fun getUserInfo(): Result<BiliResponse<UserInfo>> = resultOf {
-        api.getUserInfo()
+    /**
+     * 获取当前登录用户信息。
+     * 使用 x/web-interface/nav 接口（基于 Cookie，无需 WBI 签名），
+     * 返回 NavInfo 并映射为 UserInfo。
+     *
+     * @return Result 包含 UserInfo（登录成功时）或 null（未登录/接口返回 isLogin=false）
+     */
+    suspend fun getUserInfo(): Result<UserInfo?> = resultOf {
+        val resp = api.getNavInfo()
+        if (resp.code == 0 && resp.data != null) {
+            resp.data.toUserInfo()
+        } else {
+            null
+        }
     }
 
     fun clearCookies() {
@@ -86,11 +99,14 @@ class AuthRepository @Inject constructor(
     }
 
     /**
-     * 从 WebView CookieManager 同步 Cookie 到 OkHttp CookieJar。
-     * 用于 WebView 登录成功后，将 B站下发的登录 Cookie 同步到网络层。
+     * 从二维码登录成功后返回的 crossDomain URL 中提取登录 Cookie 并保存。
+     *
+     * WEB 二维码流程（/x/passport-login/web/qrcode/poll）登录成功时，
+     * 登录 Cookie（SESSDATA、DedeUserID、bili_jct 等）位于 data.url 的
+     * 查询参数中，而非 Set-Cookie 响应头。必须手动提取才能完成登录态持久化。
      */
-    fun syncCookiesFromWebView(cookieString: String) {
-        val cookies = CookieHelper.parseCookies(cookieString)
+    fun saveCookiesFromLoginUrl(url: String) {
+        val cookies = CookieHelper.extractCookiesFromUrl(url)
         if (cookies.isNotEmpty()) {
             cookieJar.mergeCookies(cookies)
         }

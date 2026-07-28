@@ -6,17 +6,23 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 持久化 CookieJar：使用 SharedPreferences 同步读写 Cookie，
  * 避免在主线程使用 runBlocking 读取 DataStore 导致崩溃。
+ *
+ * 内部使用 ConcurrentHashMap 保证线程安全——OkHttp 的 loadForRequest /
+ * saveFromResponse 可能在多线程并发调用（如同时发起 getUserInfo 和
+ * getFavoriteFolders），非线程安全 Map 会抛 ConcurrentModificationException
+ * 导致应用闪退（尤见于「登录后杀进程重进」场景）。
  */
 class BiliCookieJar(context: Context) : CookieJar {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("bili_cookies", Context.MODE_PRIVATE)
 
-    private val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
+    private val cookieStore = ConcurrentHashMap<String, MutableList<Cookie>>()
 
     var onCookiesUpdated: ((List<Cookie>) -> Unit)? = null
 
@@ -38,6 +44,7 @@ class BiliCookieJar(context: Context) : CookieJar {
         }
     }
 
+    @Synchronized
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         val host = url.host
         val store = cookieStore.getOrPut(host) { mutableListOf() }
@@ -51,6 +58,7 @@ class BiliCookieJar(context: Context) : CookieJar {
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
+    @Synchronized
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val host = url.host
         // 所有 bilibili.com 子域共享同一组 Cookie，
@@ -58,10 +66,11 @@ class BiliCookieJar(context: Context) : CookieJar {
         return if (host.endsWith("bilibili.com")) {
             getAllCookies().distinctBy { it.name }
         } else {
-            cookieStore[host] ?: emptyList()
+            cookieStore[host]?.toList() ?: emptyList()
         }
     }
 
+    @Synchronized
     fun setCookies(cookies: List<Cookie>) {
         cookieStore.clear()
         cookieStore["bilibili.com"] = cookies.toMutableList()
@@ -72,8 +81,9 @@ class BiliCookieJar(context: Context) : CookieJar {
 
     /**
      * 合并 Cookie（不清除已有的，同 name 覆盖）。
-     * 用于 WebView 登录后将 CookieManager 的 Cookie 同步到 OkHttp CookieJar。
+     * 用于从二维码登录 URL 或 WebView CookieManager 同步 Cookie 到 OkHttp CookieJar。
      */
+    @Synchronized
     fun mergeCookies(cookies: List<Cookie>) {
         val store = cookieStore.getOrPut("bilibili.com") { mutableListOf() }
         for (incoming in cookies) {
@@ -84,8 +94,10 @@ class BiliCookieJar(context: Context) : CookieJar {
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
+    @Synchronized
     fun getAllCookies(): List<Cookie> = cookieStore.values.flatten()
 
+    @Synchronized
     fun clearCookies() {
         cookieStore.clear()
         prefs.edit().remove("cookies").apply()

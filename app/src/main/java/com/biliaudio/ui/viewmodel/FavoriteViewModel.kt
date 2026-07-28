@@ -51,15 +51,21 @@ class FavoriteViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val userId = authRepository.getCurrentUserId()
-            if (userId != null) {
-                loadFolders(userId)
-            } else {
-                // 回退：从 preferences 读取
-                val idStr = preferencesManager.userId.first()
-                if (idStr.isNotEmpty()) {
-                    loadFolders(idStr.toLong())
+            try {
+                val userId = authRepository.getCurrentUserId()
+                if (userId != null) {
+                    loadFolders(userId)
+                } else {
+                    // 回退：从 preferences 读取
+                    val idStr = preferencesManager.userId.first()
+                    if (idStr.isNotEmpty()) {
+                        loadFolders(idStr.toLong())
+                    }
                 }
+            } catch (e: Exception) {
+                // DataStore 读取或 Cookie 访问失败不应导致应用崩溃。
+                // 用户可手动下拉刷新重新加载。
+                e.printStackTrace()
             }
         }
     }
@@ -147,9 +153,13 @@ class FavoriteViewModel @Inject constructor(
     }
 
     fun refresh() {
-        val mid = authRepository.getCurrentUserId()
-        if (mid != null) {
-            loadFolders(mid)
+        try {
+            val mid = authRepository.getCurrentUserId()
+            if (mid != null) {
+                loadFolders(mid)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
