@@ -6,7 +6,6 @@ import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.CaptchaResponse
 import com.biliaudio.data.model.UserInfo
-import com.biliaudio.data.model.WebKeyResponse
 import com.biliaudio.data.network.CookieHelper
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
@@ -47,18 +46,24 @@ class AuthViewModel @Inject constructor(
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
-    // ============ 密码登录状态 ============
+    // ============ 短信登录状态 ============
 
-    private val _passwordLoginStep = MutableStateFlow<PasswordLoginStep>(PasswordLoginStep.Idle)
-    val passwordLoginStep: StateFlow<PasswordLoginStep> = _passwordLoginStep.asStateFlow()
+    private val _smsLoginStep = MutableStateFlow<SmsLoginStep>(SmsLoginStep.Idle)
+    val smsLoginStep: StateFlow<SmsLoginStep> = _smsLoginStep.asStateFlow()
 
     private val _captchaInfo = MutableStateFlow<CaptchaResponse?>(null)
     val captchaInfo: StateFlow<CaptchaResponse?> = _captchaInfo.asStateFlow()
 
-    private var webKey: WebKeyResponse? = null
+    /** 短信倒计时（秒），>0 时按钮禁用并显示倒计时。 */
+    private val _smsCountdown = MutableStateFlow(0)
+    val smsCountdown: StateFlow<Int> = _smsCountdown.asStateFlow()
+
     private var captcha: CaptchaResponse? = null
-    private var pendingUsername: String = ""
-    private var pendingPassword: String = ""
+    private var geeTestResult: GeeTestResult? = null
+    private var smsCaptchaKey: String? = null
+    private var pendingCid: String = "86"
+    private var pendingTel: String = ""
+    private var countdownJob: Job? = null
 
     private var pollJob: Job? = null
 
@@ -72,7 +77,7 @@ class AuthViewModel @Inject constructor(
             }
         }
 
-        // 监听 Cookie 更新（扫码登录成功时触发）
+        // 监听 Cookie 更新（扫码/短信登录成功时触发）
         authRepository.onCookiesUpdated = { cookies ->
             viewModelScope.launch {
                 if (CookieHelper.hasLoginCookies(cookies)) {
@@ -98,6 +103,7 @@ class AuthViewModel @Inject constructor(
                         startPolling()
                     } else {
                         _loginStatus.value = LoginStatus.Error(response.message)
+                        _toast.value = response.message
                     }
                 }
                 is Result.Error -> {
@@ -146,50 +152,28 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    // ============ 密码登录 ============
+    // ============ 短信登录 ============
 
     /**
-     * 启动密码登录：拉取 web/key 与 captcha，
-     * 若需要 GeeTest 则进入 WaitingForCaptcha 状态，由 UI 弹出滑块。
+     * 启动短信登录第一步：拉取 GeeTest 验证码。
+     * 成功后进入 WaitingForCaptcha 状态，由 UI 弹出滑块。
      */
-    fun startPasswordLogin(username: String, password: String) {
-        if (username.isBlank() || password.isBlank()) {
-            _toast.value = "请输入用户名和密码"
+    fun startSmsLogin(cid: String, tel: String) {
+        if (tel.isBlank()) {
+            _toast.value = "请输入手机号"
             return
         }
-        pendingUsername = username
-        pendingPassword = password
-        _passwordLoginStep.value = PasswordLoginStep.LoadingCaptcha
+        pendingCid = cid
+        pendingTel = tel
+        _smsLoginStep.value = SmsLoginStep.LoadingCaptcha
 
         viewModelScope.launch {
-            // 1. 获取 RSA 公钥
-            val keyResult = authRepository.getWebKey()
-            when (keyResult) {
-                is Result.Success -> {
-                    val resp = keyResult.data
-                    if (resp.code != 0 || resp.data == null) {
-                        val msg = resp.message.ifEmpty { "获取密钥失败" }
-                        _passwordLoginStep.value = PasswordLoginStep.Error(msg)
-                        _toast.value = msg
-                        return@launch
-                    }
-                    webKey = resp.data
-                }
-                is Result.Error -> {
-                    _passwordLoginStep.value = PasswordLoginStep.Error(keyResult.message)
-                    _toast.value = keyResult.message
-                    return@launch
-                }
-                Result.Loading -> {}
-            }
-
-            // 2. 获取验证码
             when (val captchaResult = authRepository.getCaptcha()) {
                 is Result.Success -> {
                     val resp = captchaResult.data
                     if (resp.code != 0 || resp.data == null) {
                         val msg = resp.message.ifEmpty { "获取验证码失败" }
-                        _passwordLoginStep.value = PasswordLoginStep.Error(msg)
+                        _smsLoginStep.value = SmsLoginStep.Error(msg)
                         _toast.value = msg
                         return@launch
                     }
@@ -198,16 +182,16 @@ class AuthViewModel @Inject constructor(
 
                     if (resp.data.type == "geetest" && resp.data.gt.isNotEmpty()) {
                         // 需要滑块验证：交给 UI 弹出 GeeTestDialog
-                        _passwordLoginStep.value = PasswordLoginStep.WaitingForCaptcha
+                        _smsLoginStep.value = SmsLoginStep.WaitingForCaptcha
                     } else {
-                        // 不需要滑块（极少见）：直接提交
-                        submitPasswordLogin(
+                        // 不需要滑块（极少见）：直接发短信
+                        sendSmsInternal(
                             GeeTestResult(resp.data.challenge, "", "")
                         )
                     }
                 }
                 is Result.Error -> {
-                    _passwordLoginStep.value = PasswordLoginStep.Error(captchaResult.message)
+                    _smsLoginStep.value = SmsLoginStep.Error(captchaResult.message)
                     _toast.value = captchaResult.message
                 }
                 Result.Loading -> {}
@@ -221,46 +205,43 @@ class AuthViewModel @Inject constructor(
      */
     fun submitCaptchaResult(result: GeeTestResult?) {
         if (result == null) {
-            _passwordLoginStep.value = PasswordLoginStep.Idle
+            _smsLoginStep.value = SmsLoginStep.Idle
             return
         }
-        submitPasswordLogin(result)
+        geeTestResult = result
+        sendSmsInternal(result)
     }
 
-    private fun submitPasswordLogin(geeTestResult: GeeTestResult) {
-        val key = webKey
+    private fun sendSmsInternal(gee: GeeTestResult) {
         val cap = captcha
-        if (key == null || cap == null) {
-            _passwordLoginStep.value = PasswordLoginStep.Error("登录状态错误")
+        if (cap == null) {
+            _smsLoginStep.value = SmsLoginStep.Error("验证码状态错误")
             return
         }
 
         viewModelScope.launch {
-            _passwordLoginStep.value = PasswordLoginStep.LoggingIn
-            when (val result = authRepository.loginWithPassword(
-                username = pendingUsername,
-                password = pendingPassword,
-                webKey = key,
+            _smsLoginStep.value = SmsLoginStep.SendingSms
+            when (val result = authRepository.sendSmsCode(
+                cid = pendingCid,
+                tel = pendingTel,
                 captcha = cap,
-                geeTestResult = geeTestResult
+                geeTestResult = gee
             )) {
                 is Result.Success -> {
                     val resp = result.data
-                    val data = resp.data
-                    if (resp.code == 0 && data?.isLogin == true) {
-                        _isLoggedIn.value = true
-                        _passwordLoginStep.value = PasswordLoginStep.Success
-                        loadUserInfo()
+                    if (resp.code == 0 && resp.data != null) {
+                        smsCaptchaKey = resp.data.captchaKey
+                        _smsLoginStep.value = SmsLoginStep.WaitingForSmsCode
+                        startSmsCountdown()
+                        _toast.value = "验证码已发送"
                     } else {
-                        // 失败：需要重新拉 key + captcha，回到 Idle 让用户重试
-                        val msg = (data?.message?.ifEmpty { null } ?: resp.message)
-                            .ifEmpty { "登录失败" }
-                        _passwordLoginStep.value = PasswordLoginStep.Error(msg)
+                        val msg = resp.message.ifEmpty { "发送验证码失败" }
+                        _smsLoginStep.value = SmsLoginStep.Error(msg)
                         _toast.value = msg
                     }
                 }
                 is Result.Error -> {
-                    _passwordLoginStep.value = PasswordLoginStep.Error(result.message)
+                    _smsLoginStep.value = SmsLoginStep.Error(result.message)
                     _toast.value = result.message
                 }
                 Result.Loading -> {}
@@ -268,14 +249,73 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /** 重置密码登录状态，允许用户重新尝试。 */
-    fun resetPasswordLogin() {
-        _passwordLoginStep.value = PasswordLoginStep.Idle
+    /** 用户输入短信验证码后调用，完成登录。 */
+    fun loginWithSmsCode(code: String) {
+        val cap = captcha
+        val gee = geeTestResult
+        val key = smsCaptchaKey
+        if (cap == null || gee == null || key == null) {
+            _smsLoginStep.value = SmsLoginStep.Error("请先获取验证码")
+            return
+        }
+        if (code.isBlank()) {
+            _toast.value = "请输入验证码"
+            return
+        }
+
+        viewModelScope.launch {
+            _smsLoginStep.value = SmsLoginStep.LoggingIn
+            when (val result = authRepository.loginWithSms(
+                cid = pendingCid,
+                tel = pendingTel,
+                code = code,
+                captchaKey = key,
+                captcha = cap,
+                geeTestResult = gee
+            )) {
+                is Result.Success -> {
+                    val resp = result.data
+                    val data = resp.data
+                    if (resp.code == 0 && data?.isLogin == true) {
+                        _isLoggedIn.value = true
+                        _smsLoginStep.value = SmsLoginStep.Success
+                        loadUserInfo()
+                    } else {
+                        val msg = (data?.message?.ifEmpty { null } ?: resp.message)
+                            .ifEmpty { "登录失败" }
+                        _smsLoginStep.value = SmsLoginStep.Error(msg)
+                        _toast.value = msg
+                    }
+                }
+                is Result.Error -> {
+                    _smsLoginStep.value = SmsLoginStep.Error(result.message)
+                    _toast.value = result.message
+                }
+                Result.Loading -> {}
+            }
+        }
+    }
+
+    private fun startSmsCountdown() {
+        countdownJob?.cancel()
+        _smsCountdown.value = 60
+        countdownJob = viewModelScope.launch {
+            while (_smsCountdown.value > 0) {
+                delay(1000)
+                _smsCountdown.value = _smsCountdown.value - 1
+            }
+        }
+    }
+
+    /** 重置短信登录状态，允许用户重新尝试。 */
+    fun resetSmsLogin() {
+        countdownJob?.cancel()
+        _smsLoginStep.value = SmsLoginStep.Idle
         _captchaInfo.value = null
-        webKey = null
+        _smsCountdown.value = 0
         captcha = null
-        pendingUsername = ""
-        pendingPassword = ""
+        geeTestResult = null
+        smsCaptchaKey = null
     }
 
     // ============ 通用 ============
@@ -313,10 +353,12 @@ class AuthViewModel @Inject constructor(
             _isLoggedIn.value = false
             _userInfo.value = null
             _loginStatus.value = LoginStatus.Idle
-            _passwordLoginStep.value = PasswordLoginStep.Idle
+            _smsLoginStep.value = SmsLoginStep.Idle
             _captchaInfo.value = null
-            webKey = null
+            _smsCountdown.value = 0
             captcha = null
+            geeTestResult = null
+            smsCaptchaKey = null
         }
     }
 
@@ -332,6 +374,7 @@ class AuthViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         pollJob?.cancel()
+        countdownJob?.cancel()
     }
 }
 
@@ -345,18 +388,22 @@ sealed class LoginStatus {
     data class Error(val message: String) : LoginStatus()
 }
 
-/** 密码登录状态机。 */
-sealed class PasswordLoginStep {
-    /** 空闲：等待用户输入。 */
-    data object Idle : PasswordLoginStep()
-    /** 正在获取验证码 / RSA key。 */
-    data object LoadingCaptcha : PasswordLoginStep()
+/** 短信登录状态机。 */
+sealed class SmsLoginStep {
+    /** 空闲：等待用户输入手机号。 */
+    data object Idle : SmsLoginStep()
+    /** 正在获取 GeeTest 验证码。 */
+    data object LoadingCaptcha : SmsLoginStep()
     /** 等待用户完成滑块验证。 */
-    data object WaitingForCaptcha : PasswordLoginStep()
+    data object WaitingForCaptcha : SmsLoginStep()
+    /** 正在发送短信。 */
+    data object SendingSms : SmsLoginStep()
+    /** 短信已发送，等待用户输入验证码。 */
+    data object WaitingForSmsCode : SmsLoginStep()
     /** 正在提交登录请求。 */
-    data object LoggingIn : PasswordLoginStep()
+    data object LoggingIn : SmsLoginStep()
     /** 登录成功。 */
-    data object Success : PasswordLoginStep()
+    data object Success : SmsLoginStep()
     /** 登录失败，等待用户重试。 */
-    data class Error(val message: String) : PasswordLoginStep()
+    data class Error(val message: String) : SmsLoginStep()
 }

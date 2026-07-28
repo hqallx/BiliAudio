@@ -1,9 +1,14 @@
 package com.biliaudio.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,21 +16,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,6 +41,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,24 +50,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.biliaudio.ui.components.GeeTestDialog
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.LoginStatus
-import com.biliaudio.ui.viewmodel.PasswordLoginStep
+import com.biliaudio.ui.viewmodel.SmsLoginStep
+import com.biliaudio.util.QrCodeGenerator
 
 private enum class LoginTab(val label: String) {
     QrCode("扫码登录"),
-    Password("密码登录")
+    Sms("短信登录")
 }
+
+/** 常用国家/地区区号。 */
+private data class CountryCode(val code: String, val label: String)
+private val COUNTRY_CODES = listOf(
+    CountryCode("86", "+86 中国大陆"),
+    CountryCode("852", "+852 中国香港"),
+    CountryCode("853", "+853 中国澳门"),
+    CountryCode("886", "+886 中国台湾"),
+    CountryCode("1", "+1 美国/加拿大"),
+    CountryCode("81", "+81 日本"),
+    CountryCode("82", "+82 韩国"),
+    CountryCode("65", "+65 新加坡"),
+    CountryCode("60", "+60 马来西亚"),
+    CountryCode("1", "+1 其他")
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,8 +95,9 @@ fun LoginScreen(
     val loginStatus by authViewModel.loginStatus.collectAsState()
     val qrCodeUrl by authViewModel.qrCodeUrl.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-    val passwordStep by authViewModel.passwordLoginStep.collectAsState()
+    val smsStep by authViewModel.smsLoginStep.collectAsState()
     val captchaInfo by authViewModel.captchaInfo.collectAsState()
+    val smsCountdown by authViewModel.smsCountdown.collectAsState()
 
     var selectedTab by remember { mutableStateOf(LoginTab.QrCode) }
 
@@ -115,8 +142,8 @@ fun LoginScreen(
                     selected = selectedTab == tab,
                     onClick = {
                         selectedTab = tab
-                        if (tab == LoginTab.Password) {
-                            authViewModel.resetPasswordLogin()
+                        if (tab == LoginTab.Sms) {
+                            authViewModel.resetSmsLogin()
                         }
                     },
                     text = { Text(tab.label) }
@@ -140,15 +167,21 @@ fun LoginScreen(
                     onGenerate = { authViewModel.generateQrCode() },
                     onRefresh = { authViewModel.refreshQrCode() }
                 )
-                LoginTab.Password -> PasswordContent(
-                    step = passwordStep,
-                    onLogin = { username, password ->
-                        authViewModel.startPasswordLogin(username, password)
-                    },
-                    onReset = { authViewModel.resetPasswordLogin() }
+                LoginTab.Sms -> SmsContent(
+                    step = smsStep,
+                    countdown = smsCountdown,
+                    onSendCode = { cid, tel -> authViewModel.startSmsLogin(cid, tel) },
+                    onLogin = { code -> authViewModel.loginWithSmsCode(code) },
+                    onReset = { authViewModel.resetSmsLogin() }
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 跳转 B站客户端按钮：让用户在 B站 App 内登录后，
+        // 回到本应用用扫码登录（用 B站 App 扫下方二维码）
+        BiliClientButton()
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -161,7 +194,7 @@ fun LoginScreen(
     }
 
     // GeeTest 滑块弹窗：等待用户验证
-    val needCaptcha = passwordStep is PasswordLoginStep.WaitingForCaptcha
+    val needCaptcha = smsStep is SmsLoginStep.WaitingForCaptcha
     val cap = captchaInfo
     if (needCaptcha && cap != null && cap.gt.isNotEmpty() && cap.challenge.isNotEmpty()) {
         GeeTestDialog(
@@ -296,18 +329,26 @@ private fun QrCodeContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PasswordContent(
-    step: PasswordLoginStep,
-    onLogin: (String, String) -> Unit,
+private fun SmsContent(
+    step: SmsLoginStep,
+    countdown: Int,
+    onSendCode: (String, String) -> Unit,
+    onLogin: (String) -> Unit,
     onReset: () -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var selectedCountry by remember { mutableStateOf(COUNTRY_CODES[0]) }
+    var expanded by remember { mutableStateOf(false) }
+    var phone by remember { mutableStateOf("") }
+    var smsCode by remember { mutableStateOf("") }
 
-    val isBusy = step is PasswordLoginStep.LoadingCaptcha ||
-        step is PasswordLoginStep.LoggingIn
+    val showCodeInput = step is SmsLoginStep.WaitingForSmsCode ||
+        step is SmsLoginStep.LoggingIn ||
+        step is SmsLoginStep.Success
+    val isBusy = step is SmsLoginStep.LoadingCaptcha ||
+        step is SmsLoginStep.SendingSms ||
+        step is SmsLoginStep.LoggingIn
 
     Column(
         modifier = Modifier
@@ -315,59 +356,107 @@ private fun PasswordContent(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("手机号 / 邮箱") },
-            singleLine = true,
-            enabled = !isBusy,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+        // 区号 + 手机号
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = selectedCountry.label,
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = !isBusy,
+                    label = { Text("区号") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    },
+                    modifier = Modifier.weight(0.45f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it.filter { c -> c.isDigit() } },
+                    enabled = !isBusy,
+                    singleLine = true,
+                    label = { Text("手机号") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.weight(0.55f)
+                )
+            }
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                COUNTRY_CODES.forEach { country ->
+                    DropdownMenuItem(
+                        text = { Text(country.label) },
+                        onClick = {
+                            selectedCountry = country
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("密码") },
-            singleLine = true,
-            enabled = !isBusy,
-            visualTransformation = if (passwordVisible) VisualTransformation.None
-                else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff
-                            else Icons.Default.Visibility,
-                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        // 验证码输入框 + 发送按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = smsCode,
+                onValueChange = { smsCode = it.filter { c -> c.isDigit() }.take(6) },
+                enabled = showCodeInput && step !is SmsLoginStep.LoggingIn,
+                singleLine = true,
+                label = { Text("验证码") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
+                    imeAction = ImeAction.Done
+                ),
+                modifier = Modifier.weight(0.55f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = { onSendCode(selectedCountry.code, phone) },
+                enabled = !isBusy && phone.isNotBlank() && countdown <= 0,
+                modifier = Modifier
+                    .weight(0.45f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = if (countdown > 0) "${countdown}s" else "发送验证码",
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // 状态提示
         when (step) {
-            is PasswordLoginStep.Idle -> { /* 等待输入 */ }
-            is PasswordLoginStep.LoadingCaptcha -> {
+            is SmsLoginStep.Idle -> { /* 等待输入 */ }
+            is SmsLoginStep.LoadingCaptcha -> {
                 Text(
-                    text = "正在准备验证码...",
+                    text = "正在准备滑块验证...",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            is PasswordLoginStep.WaitingForCaptcha -> {
+            is SmsLoginStep.WaitingForCaptcha -> {
                 Text(
                     text = "请完成下方滑块验证",
                     style = MaterialTheme.typography.bodyMedium,
@@ -375,7 +464,23 @@ private fun PasswordContent(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            is PasswordLoginStep.LoggingIn -> {
+            is SmsLoginStep.SendingSms -> {
+                Text(
+                    text = "正在发送短信...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            is SmsLoginStep.WaitingForSmsCode -> {
+                Text(
+                    text = "验证码已发送，请输入收到的验证码",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            is SmsLoginStep.LoggingIn -> {
                 Text(
                     text = "正在登录...",
                     style = MaterialTheme.typography.bodyMedium,
@@ -383,7 +488,7 @@ private fun PasswordContent(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            is PasswordLoginStep.Success -> {
+            is SmsLoginStep.Success -> {
                 Text(
                     text = "登录成功",
                     style = MaterialTheme.typography.bodyMedium,
@@ -391,7 +496,7 @@ private fun PasswordContent(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            is PasswordLoginStep.Error -> {
+            is SmsLoginStep.Error -> {
                 Text(
                     text = step.message,
                     style = MaterialTheme.typography.bodyMedium,
@@ -402,14 +507,16 @@ private fun PasswordContent(
         }
 
         Button(
-            onClick = { onLogin(username, password) },
-            enabled = !isBusy && username.isNotBlank() && password.isNotBlank(),
+            onClick = { onLogin(smsCode) },
+            enabled = showCodeInput &&
+                step !is SmsLoginStep.LoggingIn &&
+                smsCode.length >= 4,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
-            if (isBusy) {
+            if (step is SmsLoginStep.LoggingIn) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -420,11 +527,12 @@ private fun PasswordContent(
             }
         }
 
-        if (step is PasswordLoginStep.Error) {
+        if (step is SmsLoginStep.Error) {
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = {
                     onReset()
+                    smsCode = ""
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
@@ -435,16 +543,68 @@ private fun PasswordContent(
     }
 }
 
+/**
+ * 跳转 B站客户端按钮。
+ * 如果已安装 B站 App 则打开它（用户可在 App 内登录或扫描本应用的二维码）；
+ * 否则打开应用商店/官网。
+ */
+@Composable
+private fun BiliClientButton() {
+    val context = LocalContext.current
+    OutlinedButton(
+        onClick = { launchBiliClient(context) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.PhoneAndroid,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = "打开B站客户端", style = MaterialTheme.typography.titleSmall)
+    }
+}
+
+private fun launchBiliClient(context: Context) {
+    val biliPackage = "tv.danmaku.bili"
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(biliPackage)
+    if (launchIntent != null) {
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(launchIntent)
+    } else {
+        // 未安装 B站 App：打开官网下载页
+        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://app.bilibili.com")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(webIntent) }
+    }
+}
+
+/**
+ * 用 zxing 把 bilibili 返回的登录链接生成本地二维码 Bitmap。
+ * 这是二维码不显示的根本修复：之前误把登录链接当图片 URL 用 Coil 加载。
+ */
 @Composable
 private fun QrCodeImage(qrCodeUrl: String?) {
-    if (qrCodeUrl != null) {
-        AsyncImage(
-            model = qrCodeUrl,
-            contentDescription = null,
+    var bitmap by remember(qrCodeUrl) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(qrCodeUrl) {
+        bitmap = qrCodeUrl?.let { QrCodeGenerator.generate(it, 600) }
+    }
+
+    val bmp = bitmap
+    if (bmp != null) {
+        Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = "登录二维码",
+            contentScale = ContentScale.Fit,
             modifier = Modifier
-                .size(200.dp)
+                .size(220.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
+                .background(Color.White)
         )
     } else {
         QrCodePlaceholder()
@@ -455,7 +615,7 @@ private fun QrCodeImage(qrCodeUrl: String?) {
 private fun QrCodePlaceholder() {
     Box(
         modifier = Modifier
-            .size(200.dp)
+            .size(220.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface),
         contentAlignment = Alignment.Center

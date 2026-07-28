@@ -3,18 +3,17 @@ package com.biliaudio.data.repository
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.BiliResponse
 import com.biliaudio.data.model.CaptchaResponse
-import com.biliaudio.data.model.LoginResponse
 import com.biliaudio.data.model.QrCodeResponse
 import com.biliaudio.data.model.QrCodeStatusData
+import com.biliaudio.data.model.SmsLoginResponse
+import com.biliaudio.data.model.SmsSendResponse
 import com.biliaudio.data.model.UserInfo
-import com.biliaudio.data.model.WebKeyResponse
 import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.network.BiliCookieJar
 import com.biliaudio.data.network.BiliPassportApi
 import com.biliaudio.data.network.CookieHelper
 import com.biliaudio.data.resultOf
 import com.biliaudio.ui.components.GeeTestResult
-import com.biliaudio.util.RSAUtil
 import okhttp3.Cookie
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,29 +39,41 @@ class AuthRepository @Inject constructor(
         passportApi.checkQrCodeStatus(qrcodeKey)
     }
 
-    // ============ 密码登录 ============
-
-    suspend fun getWebKey(): Result<BiliResponse<WebKeyResponse>> = resultOf {
-        passportApi.getWebKey()
-    }
+    // ============ 短信登录 ============
 
     suspend fun getCaptcha(): Result<BiliResponse<CaptchaResponse>> = resultOf {
         passportApi.getCaptcha()
     }
 
-    suspend fun loginWithPassword(
-        username: String,
-        password: String,
-        webKey: WebKeyResponse,
+    suspend fun sendSmsCode(
+        cid: String,
+        tel: String,
         captcha: CaptchaResponse,
         geeTestResult: GeeTestResult
-    ): Result<BiliResponse<LoginResponse>> = resultOf {
-        val encryptedPassword = RSAUtil.encryptPassword(password, webKey.hash, webKey.key)
-            ?: throw IllegalStateException("密码加密失败")
-        passportApi.loginWithPassword(
-            username = username,
-            encryptedPassword = encryptedPassword,
-            keyHash = webKey.hash,
+    ): Result<BiliResponse<SmsSendResponse>> = resultOf {
+        passportApi.sendSmsCode(
+            cid = cid,
+            tel = tel,
+            recaptchaToken = captcha.recaptchaToken,
+            geeSeccode = geeTestResult.seccode,
+            geeValidate = geeTestResult.validate,
+            geeChallenge = geeTestResult.challenge
+        )
+    }
+
+    suspend fun loginWithSms(
+        cid: String,
+        tel: String,
+        code: String,
+        captchaKey: String,
+        captcha: CaptchaResponse,
+        geeTestResult: GeeTestResult
+    ): Result<BiliResponse<SmsLoginResponse>> = resultOf {
+        passportApi.loginWithSms(
+            cid = cid,
+            tel = tel,
+            code = code,
+            captchaKey = captchaKey,
             recaptchaToken = captcha.recaptchaToken,
             geeSeccode = geeTestResult.seccode,
             geeValidate = geeTestResult.validate,

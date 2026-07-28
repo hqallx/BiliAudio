@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import java.util.UUID
 
 /**
  * 持久化 CookieJar：使用 SharedPreferences 同步读写 Cookie，
@@ -21,6 +22,7 @@ class BiliCookieJar(context: Context) : CookieJar {
 
     init {
         restore()
+        ensureBuvid3()
     }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
@@ -50,6 +52,7 @@ class BiliCookieJar(context: Context) : CookieJar {
     fun setCookies(cookies: List<Cookie>) {
         cookieStore.clear()
         cookieStore["bilibili.com"] = cookies.toMutableList()
+        ensureBuvid3()
         persist()
         onCookiesUpdated?.invoke(cookies)
     }
@@ -59,7 +62,9 @@ class BiliCookieJar(context: Context) : CookieJar {
     fun clearCookies() {
         cookieStore.clear()
         prefs.edit().remove("cookies").apply()
-        onCookiesUpdated?.invoke(emptyList())
+        // 清除登录态后仍保留 buvid3，避免风控
+        ensureBuvid3()
+        onCookiesUpdated?.invoke(getAllCookies())
     }
 
     /**
@@ -74,10 +79,41 @@ class BiliCookieJar(context: Context) : CookieJar {
     }
 
     /**
+     * 确保存在 buvid3 Cookie。bilibili 的登录接口（二维码生成、短信发送等）
+     * 越来越依赖 buvid3 做风控，缺失会导致请求被风控拦截。
+     * 本地生成一个 UUID 格式的 buvid3 即可被服务端接受。
+     */
+    private fun ensureBuvid3() {
+        val existing = getAllCookies().firstOrNull { it.name == "buvid3" }
+        if (existing != null && existing.value.isNotEmpty()) return
+
+        val buvid3 = prefs.getString("buvid3", null) ?: run {
+            // 生成 UUID 格式 buvid3（小写带连字符）
+            val generated = UUID.randomUUID().toString().uppercase()
+            prefs.edit().putString("buvid3", generated).apply()
+            generated
+        }
+
+        val cookie = Cookie.Builder()
+            .name("buvid3")
+            .value(buvid3)
+            .domain(".bilibili.com")
+            .path("/")
+            .build()
+
+        val store = cookieStore.getOrPut("bilibili.com") { mutableListOf() }
+        store.removeAll { it.name == "buvid3" }
+        store.add(cookie)
+    }
+
+    /**
      * 将 Cookie 持久化到 SharedPreferences（同步操作，安全在任何线程调用）。
+     * 注意：buvid3 单独存储在 "buvid3" key，不写入 "cookies"，避免 clearCookies 时丢失。
      */
     private fun persist() {
-        val cookieString = CookieHelper.cookiesToString(getAllCookies())
+        val cookieString = CookieHelper.cookiesToString(
+            getAllCookies().filter { it.name != "buvid3" }
+        )
         prefs.edit().putString("cookies", cookieString).apply()
     }
 }

@@ -145,17 +145,7 @@ data class QrCodeStatusData(
     val timestamp: Long? = null
 )
 
-// ============ 密码登录相关 ============
-
-/**
- * /x/passport-login/web/key 返回。
- * hash 是用于拼接密码的盐值，key 是 X.509 SubjectPublicKeyInfo 的 Base64 字符串。
- */
-@Serializable
-data class WebKeyResponse(
-    val hash: String,
-    val key: String
-)
+// ============ 短信登录相关 ============
 
 /**
  * /x/passport-login/captcha 返回。
@@ -185,23 +175,28 @@ data class GeetestInfo(
     val challenge: String = ""
 )
 
+// ============ 短信登录相关 ============
+
 /**
- * /x/passport-login/web/v6/login 返回。
- * 注意：成功登录的 Cookie 通过 Set-Cookie 响应头下发，
+ * /x/passport-login/web/sms/send 返回。
+ * captcha_key 用于下一步 /x/passport-login/web/login/sms 提交校验。
+ */
+@Serializable
+data class SmsSendResponse(
+    @SerialName("captcha_key")
+    val captchaKey: String = "",
+    val recaptcha: String = ""
+)
+
+/**
+ * /x/passport-login/web/login/sms 返回。
+ * 成功登录的 Cookie 通过 Set-Cookie 响应头下发，
  * 由 OkHttp + BiliCookieJar 自动捕获，无需从 data 字段提取。
  */
 @Serializable
-data class LoginResponse(
+data class SmsLoginResponse(
     val status: Int = 0,
     val message: String = "",
-    val isLogin: Boolean = false,
-    @SerialName("token_info")
-    val tokenInfo: LoginTokenInfo? = null
-)
-
-@Serializable
-data class LoginTokenInfo(
-    val mid: Long = 0,
-    @SerialName("access_token")
-    val accessToken: String = ""
+    @SerialName("isLogin")
+    val isLogin: Boolean = false
 )
