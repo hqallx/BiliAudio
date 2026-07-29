@@ -197,9 +197,16 @@ class FavoriteViewModel @Inject constructor(
                     is Result.Success -> {
                         val response = result.data
                         if (response.code == 0 && response.data != null) {
-                            _seasons.value = response.data.items
+                            // seasons_series 返回 items_lists，其中 seasons_list 为合集、
+                            // series_list 为系列；B站空间二者同页展示，这里合并后统一呈现。
+                            val lists = response.data.items_lists
+                            val combined = lists.seasons_list
                                 .mapNotNull { it.meta }
-                                .filter { it.season_id != 0L }
+                                .filter { it.season_id != 0L } +
+                                lists.series_list
+                                    .mapNotNull { it.meta }
+                                    .filter { it.series_id != 0L }
+                            _seasons.value = combined
                         } else {
                             _toast.value = response.message
                         }
@@ -247,14 +254,48 @@ class FavoriteViewModel @Inject constructor(
     }
 
     /**
-     * 自动获取当前用户 mid 后加载合集视频，供 UI 层无需关心 mid 时调用。
+     * 加载指定系列内的视频列表，与合集区别在于请求接口不同（series/archives）。
      */
-    fun loadSeasonVideosAuto(seasonId: Long) {
+    fun loadSeriesVideos(mid: Long, seriesId: Long) {
+        viewModelScope.launch {
+            _isLoadingVideos.value = true
+            try {
+                when (val result = favoriteRepository.getSeriesArchives(mid, seriesId)) {
+                    is Result.Success -> {
+                        val response = result.data
+                        if (response.code == 0 && response.data != null) {
+                            _videos.value = response.data.archives.map { it.toVideoItem() }
+                            applySearchFilter()
+                        } else {
+                            _toast.value = response.message
+                        }
+                    }
+                    is Result.Error -> {
+                        _toast.value = "加载系列视频失败: ${result.message}"
+                    }
+                    Result.Loading -> {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            _isLoadingVideos.value = false
+        }
+    }
+
+    /**
+     * 自动获取当前用户 mid 后按类型加载合集/系列视频，供 UI 层无需关心 mid 时调用。
+     * @param isSeries true 走系列接口，false 走合集接口。
+     */
+    fun loadSeasonOrSeriesVideosAuto(businessId: Long, isSeries: Boolean) {
         viewModelScope.launch {
             try {
                 val mid = authRepository.getCurrentUserId()
                 if (mid != null) {
-                    loadSeasonVideos(mid, seasonId)
+                    if (isSeries) {
+                        loadSeriesVideos(mid, businessId)
+                    } else {
+                        loadSeasonVideos(mid, businessId)
+                    }
                 } else {
                     _toast.value = "未登录，无法加载合集"
                     _isLoadingVideos.value = false
@@ -269,6 +310,13 @@ class FavoriteViewModel @Inject constructor(
     // ============ 播放历史 ============
 
     fun loadHistory() {
+        // 历史接口基于 Cookie 认证，未登录时直接清空并跳过请求，
+        // 避免 init/refresh 在未登录态下触发失败请求。
+        if (!authRepository.isLoggedIn()) {
+            _history.value = emptyList()
+            _isLoadingHistory.value = false
+            return
+        }
         viewModelScope.launch {
             _isLoadingHistory.value = true
             try {

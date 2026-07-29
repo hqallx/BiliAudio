@@ -52,6 +52,15 @@ class FavoriteRepository @Inject constructor(
         api.getSeasonArchives(mid, seasonId, pageNum, pageSize)
     }
 
+    suspend fun getSeriesArchives(
+        mid: Long,
+        seriesId: Long,
+        pageNum: Int = 1,
+        pageSize: Int = 30
+    ): Result<BiliResponse<SeasonArchivesResponse>> = resultOf {
+        api.getSeriesArchives(mid, seriesId, pageNum, pageSize)
+    }
+
     // ============ 播放历史 ============
 
     suspend fun getHistory(

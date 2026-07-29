@@ -219,8 +219,8 @@ fun AppRoot(
                         onFolderClick = { folderId, folderName ->
                             navController.navigate("videos/$folderId/$folderName")
                         },
-                        onSeasonClick = { seasonId, seasonName ->
-                            navController.navigate("season/$seasonId/$seasonName")
+                        onSeasonClick = { seasonId, seasonName, isSeries ->
+                            navController.navigate("season/$seasonId/$seasonName/$isSeries")
                         },
                         onLoginClick = {
                             navController.navigate("login")
@@ -241,13 +241,15 @@ fun AppRoot(
                     )
                 }
 
-                composable("season/{seasonId}/{seasonName}") { backStackEntry ->
+                composable("season/{seasonId}/{seasonName}/{isSeries}") { backStackEntry ->
                     val seasonId = backStackEntry.arguments?.getString("seasonId")?.toLong() ?: 0L
                     val seasonName = backStackEntry.arguments?.getString("seasonName") ?: ""
+                    val isSeries = backStackEntry.arguments?.getString("isSeries")?.toBoolean() ?: false
                     VideoListScreen(
                         folderId = seasonId,
                         folderName = seasonName,
                         source = VideoListSource.SEASON,
+                        isSeries = isSeries,
                         favoriteViewModel = favoriteViewModel,
                         playerViewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() }

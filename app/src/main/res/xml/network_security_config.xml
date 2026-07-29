@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  B站返回的封面/头像 URL 多为 http:// 明文（如 http://i0.hdslb.com/...），
+  Android 9+ 默认禁止明文流量会导致图片加载失败。
+  这里仅对 B站相关 CDN 域名放行明文 HTTP，其余域名仍强制 HTTPS。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">hdslb.com</domain>
+        <domain includeSubdomains="true">bilibili.com</domain>
+        <domain includeSubdomains="true">biliimg.com</domain>
+        <domain includeSubdomains="true">bilivideo.com</domain>
+        <domain includeSubdomains="true">bilivideo.cn</domain>
+        <domain includeSubdomains="true">akamaized.net</domain>
+    </domain-config>
+</network-security-config>

@@ -236,28 +236,49 @@ data class SmsLoginResponse(
 
 // ============ 合集（seasons）相关 ============
 // 接口：x/polymer/web-space/home/seasons_series
+// 注意：该接口返回 data.items_lists，内含 seasons_list（合集）与 series_list（系列）。
+// B站空间里合集与系列在同一页面展示，这里一并解析后合并展示。
 
 @Serializable
 data class SeasonsSeriesResponse(
-    val items: List<SeasonItem> = emptyList(),
+    val items_lists: SeasonItemsLists = SeasonItemsLists()
+)
+
+@Serializable
+data class SeasonItemsLists(
+    val seasons_list: List<SeasonListItem> = emptyList(),
+    val series_list: List<SeasonListItem> = emptyList(),
     val page: SeasonPage = SeasonPage()
 )
 
 @Serializable
-data class SeasonItem(
+data class SeasonListItem(
     val meta: SeasonMeta? = null
 )
 
+/**
+ * 合集/系列元数据。
+ * 合集用 season_id，系列用 series_id；通过 [businessId] / [isSeries] 统一访问。
+ */
 @Serializable
 data class SeasonMeta(
     val season_id: Long = 0,
+    val series_id: Long = 0,
     val mid: Long = 0,
     val name: String = "",
     val cover: String = "",
     val description: String = "",
     val total: Int = 0,
     val ptime: Long = 0
-)
+) {
+    /** 统一业务 id：合集取 season_id，系列取 series_id。 */
+    val businessId: Long
+        get() = if (season_id != 0L) season_id else series_id
+
+    /** 是否为系列（而非合集），决定视频列表走哪个接口。 */
+    val isSeries: Boolean
+        get() = season_id == 0L && series_id != 0L
+}
 
 @Serializable
 data class SeasonPage(

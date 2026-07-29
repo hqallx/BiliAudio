@@ -71,7 +71,7 @@ fun LibraryScreen(
     authViewModel: AuthViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     onFolderClick: (Long, String) -> Unit = { _, _ -> },
-    onSeasonClick: (Long, String) -> Unit = { _, _ -> },
+    onSeasonClick: (Long, String, Boolean) -> Unit = { _, _, _ -> },
     onLoginClick: () -> Unit = {}
 ) {
     val folders by favoriteViewModel.folders.collectAsState()
@@ -242,7 +242,7 @@ private fun FavoritesTab(
 private fun SeasonsTab(
     seasons: List<com.biliaudio.data.model.SeasonMeta>,
     isLoading: Boolean,
-    onSeasonClick: (Long, String) -> Unit
+    onSeasonClick: (Long, String, Boolean) -> Unit
 ) {
     if (isLoading && seasons.isEmpty()) {
         LoadingBox()
@@ -263,7 +263,7 @@ private fun SeasonsTab(
                 title = season.name,
                 count = season.total,
                 coverUrl = season.cover,
-                onClick = { onSeasonClick(season.season_id, season.name) }
+                onClick = { onSeasonClick(season.businessId, season.name, season.isSeries) }
             )
         }
     }

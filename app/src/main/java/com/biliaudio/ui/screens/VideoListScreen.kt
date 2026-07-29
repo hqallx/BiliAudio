@@ -45,7 +45,7 @@ import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 
-/** 视频列表的数据来源，区分收藏夹与合集。 */
+/** 视频列表的数据来源，区分收藏夹与合集/系列。 */
 enum class VideoListSource { FAVORITE, SEASON }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +54,7 @@ fun VideoListScreen(
     folderId: Long,
     folderName: String,
     source: VideoListSource = VideoListSource.FAVORITE,
+    isSeries: Boolean = false,
     favoriteViewModel: FavoriteViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     onBackClick: () -> Unit = {}
@@ -67,11 +68,11 @@ fun VideoListScreen(
 
     // 进入页面时根据来源触发加载：
     // - FAVORITE: folderId 为收藏夹 mediaId
-    // - SEASON: folderId 为合集 seasonId（mid 由 ViewModel 自动获取）
-    LaunchedEffect(folderId, source) {
+    // - SEASON: folderId 为合集 seasonId 或系列 seriesId，由 isSeries 决定走哪个接口（mid 由 ViewModel 自动获取）
+    LaunchedEffect(folderId, source, isSeries) {
         when (source) {
             VideoListSource.FAVORITE -> favoriteViewModel.loadVideos(folderId)
-            VideoListSource.SEASON -> favoriteViewModel.loadSeasonVideosAuto(folderId)
+            VideoListSource.SEASON -> favoriteViewModel.loadSeasonOrSeriesVideosAuto(folderId, isSeries)
         }
     }
 

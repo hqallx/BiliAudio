@@ -66,6 +66,19 @@ interface BiliApi {
         @Query("sort_reverse") sortReverse: Boolean = false
     ): BiliResponse<SeasonArchivesResponse>
 
+    /**
+     * 获取指定系列内的视频列表。
+     * 接口：x/polymer/web-space/series/archives
+     * 系列与合集是两种内容组织形式，视频加载接口不同，但返回结构一致（archives 数组）。
+     */
+    @GET("x/polymer/web-space/series/archives")
+    suspend fun getSeriesArchives(
+        @Query("mid") mid: Long,
+        @Query("series_id") seriesId: Long,
+        @Query("page_num") pageNum: Int = 1,
+        @Query("page_size") pageSize: Int = 30
+    ): BiliResponse<SeasonArchivesResponse>
+
     // ============ 播放历史 ============
 
     /**
