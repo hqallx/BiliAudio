@@ -7,6 +7,7 @@ import com.biliaudio.data.Result
 import com.biliaudio.data.model.CaptchaResponse
 import com.biliaudio.data.model.UserInfo
 import com.biliaudio.data.network.CookieHelper
+import com.biliaudio.data.repository.NavResult
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
 import com.biliaudio.ui.components.GeeTestResult
@@ -62,11 +63,17 @@ class AuthViewModel @Inject constructor(
     private var geeTestResult: GeeTestResult? = null
     private var smsCaptchaKey: String? = null
     // bilibili 国际代码 ID：1=中国大陆（不是区号86）
+    // @Volatile：主线程写、协程读，保证可见性
+    @Volatile
     private var pendingCid: String = "1"
+    @Volatile
     private var pendingTel: String = ""
     private var countdownJob: Job? = null
 
     private var pollJob: Job? = null
+
+    /** loadUserInfo 的协程，防重入：多次调用时取消上一个，避免并发 nav 请求。 */
+    private var userJob: Job? = null
 
     init {
         // 应用启动时检查 Cookie 是否有效。
@@ -144,37 +151,46 @@ class AuthViewModel @Inject constructor(
         val qrKey = _qrCodeKey.value ?: return
 
         pollJob = viewModelScope.launch {
-            while (true) {
+            // 二维码有效期约 180 秒，轮询间隔 2 秒，最多轮询 100 次（200 秒）兜底，
+            // 避免服务端不返回 EXPIRED 时无限轮询耗电。
+            var pollCount = 0
+            val maxPolls = 100
+            while (pollCount < maxPolls) {
+                pollCount++
                 try {
                     delay(BiliConstants.QR_CODE_POLL_INTERVAL_MS)
                     when (val result = authRepository.checkQrCodeStatus(qrKey)) {
                         is Result.Success -> {
-                            when (result.data.data?.code) {
+                            val code = result.data.data?.code
+                            when (code) {
                                 BiliConstants.QrCodeStatus.EXPIRED -> {
                                     _loginStatus.value = LoginStatus.Expired
-                                    break
+                                    return@launch
                                 }
                                 BiliConstants.QrCodeStatus.SUCCESS -> {
                                     // WEB 二维码登录成功：登录 Cookie（SESSDATA/DedeUserID/
                                     // bili_jct）位于 data.url 的 crossDomain 链接查询参数中。
                                     // Set-Cookie 响应头不一定包含这些 Cookie，必须从 URL 提取。
+                                    //
+                                    // Cookie 写入内存 cookieStore 后立即可被后续请求使用
+                                    // （loadForRequest 读内存），无需等待落盘，故不延迟。
                                     val loginUrl = result.data.data?.url
                                     if (!loginUrl.isNullOrEmpty()) {
                                         authRepository.saveCookiesFromLoginUrl(loginUrl)
                                     }
                                     _loginStatus.value = LoginStatus.Success
                                     _isLoggedIn.value = true
-                                    // 延迟 500ms 再加载用户信息，确保 Cookie 已持久化
-                                    // 且服务端登录态已生效，避免 nav 接口偶发返回未登录
-                                    delay(500)
                                     loadUserInfo()
-                                    break
+                                    return@launch
                                 }
                                 BiliConstants.QrCodeStatus.SCANNED_WAITING_CONFIRM -> {
                                     _loginStatus.value = LoginStatus.Scanned
                                 }
                                 BiliConstants.QrCodeStatus.WAITING_FOR_SCAN -> {
                                     _loginStatus.value = LoginStatus.QrCodeReady
+                                }
+                                else -> {
+                                    // code 为 null 或未知值：记录但不中断轮询
                                 }
                             }
                         }
@@ -188,6 +204,8 @@ class AuthViewModel @Inject constructor(
                     e.printStackTrace()
                 }
             }
+            // 超过最大轮询次数仍未成功，标记为过期
+            _loginStatus.value = LoginStatus.Expired
         }
     }
 
@@ -207,33 +225,39 @@ class AuthViewModel @Inject constructor(
         _smsLoginStep.value = SmsLoginStep.LoadingCaptcha
 
         viewModelScope.launch {
-            when (val captchaResult = authRepository.getCaptcha()) {
-                is Result.Success -> {
-                    val resp = captchaResult.data
-                    if (resp.code != 0 || resp.data == null) {
-                        val msg = resp.message.ifEmpty { "获取验证码失败" }
-                        _smsLoginStep.value = SmsLoginStep.Error(msg)
-                        _toast.value = msg
-                        return@launch
-                    }
-                    captcha = resp.data
-                    _captchaInfo.value = resp.data
+            try {
+                when (val captchaResult = authRepository.getCaptcha()) {
+                    is Result.Success -> {
+                        val resp = captchaResult.data
+                        if (resp.code != 0 || resp.data == null) {
+                            val msg = resp.message.ifEmpty { "获取验证码失败" }
+                            _smsLoginStep.value = SmsLoginStep.Error(msg)
+                            _toast.value = msg
+                            return@launch
+                        }
+                        captcha = resp.data
+                        _captchaInfo.value = resp.data
 
-                    if (resp.data.type == "geetest" && resp.data.gt.isNotEmpty()) {
-                        // 需要滑块验证：交给 UI 弹出 GeeTestDialog
-                        _smsLoginStep.value = SmsLoginStep.WaitingForCaptcha
-                    } else {
-                        // 不需要滑块（极少见）：直接发短信
-                        sendSmsInternal(
-                            GeeTestResult(resp.data.challenge, "", "")
-                        )
+                        if (resp.data.type == "geetest" && resp.data.gt.isNotEmpty()) {
+                            // 需要滑块验证：交给 UI 弹出 GeeTestDialog
+                            _smsLoginStep.value = SmsLoginStep.WaitingForCaptcha
+                        } else {
+                            // 不需要滑块（极少见）：直接发短信
+                            sendSmsInternal(
+                                GeeTestResult(resp.data.challenge, "", "")
+                            )
+                        }
                     }
+                    is Result.Error -> {
+                        _smsLoginStep.value = SmsLoginStep.Error(captchaResult.message)
+                        _toast.value = captchaResult.message
+                    }
+                    Result.Loading -> {}
                 }
-                is Result.Error -> {
-                    _smsLoginStep.value = SmsLoginStep.Error(captchaResult.message)
-                    _toast.value = captchaResult.message
-                }
-                Result.Loading -> {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _smsLoginStep.value = SmsLoginStep.Error(e.message ?: "获取验证码失败")
+                _toast.value = e.message ?: "获取验证码失败"
             }
         }
     }
@@ -265,31 +289,37 @@ class AuthViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _smsLoginStep.value = SmsLoginStep.SendingSms
-            when (val result = authRepository.sendSmsCode(
-                cid = pendingCid,
-                tel = pendingTel,
-                captcha = cap,
-                geeTestResult = gee
-            )) {
-                is Result.Success -> {
-                    val resp = result.data
-                    if (resp.code == 0 && resp.data != null) {
-                        smsCaptchaKey = resp.data.captchaKey
-                        _smsLoginStep.value = SmsLoginStep.WaitingForSmsCode
-                        startSmsCountdown()
-                        _toast.value = "验证码已发送"
-                    } else {
-                        val msg = resp.message.ifEmpty { "发送验证码失败" }
-                        _smsLoginStep.value = SmsLoginStep.Error(msg)
-                        _toast.value = msg
+            try {
+                _smsLoginStep.value = SmsLoginStep.SendingSms
+                when (val result = authRepository.sendSmsCode(
+                    cid = pendingCid,
+                    tel = pendingTel,
+                    captcha = cap,
+                    geeTestResult = gee
+                )) {
+                    is Result.Success -> {
+                        val resp = result.data
+                        if (resp.code == 0 && resp.data != null) {
+                            smsCaptchaKey = resp.data.captchaKey
+                            _smsLoginStep.value = SmsLoginStep.WaitingForSmsCode
+                            startSmsCountdown()
+                            _toast.value = "验证码已发送"
+                        } else {
+                            val msg = resp.message.ifEmpty { "发送验证码失败" }
+                            _smsLoginStep.value = SmsLoginStep.Error(msg)
+                            _toast.value = msg
+                        }
                     }
+                    is Result.Error -> {
+                        _smsLoginStep.value = SmsLoginStep.Error(result.message)
+                        _toast.value = result.message
+                    }
+                    Result.Loading -> {}
                 }
-                is Result.Error -> {
-                    _smsLoginStep.value = SmsLoginStep.Error(result.message)
-                    _toast.value = result.message
-                }
-                Result.Loading -> {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _smsLoginStep.value = SmsLoginStep.Error(e.message ?: "发送验证码失败")
+                _toast.value = e.message ?: "发送验证码失败"
             }
         }
     }
@@ -307,32 +337,38 @@ class AuthViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _smsLoginStep.value = SmsLoginStep.LoggingIn
-            when (val result = authRepository.loginWithSms(
-                cid = pendingCid,
-                tel = pendingTel,
-                code = code,
-                captchaKey = key
-            )) {
-                is Result.Success -> {
-                    val resp = result.data
-                    val data = resp.data
-                    if (resp.code == 0 && data?.isLogin == true) {
-                        _isLoggedIn.value = true
-                        _smsLoginStep.value = SmsLoginStep.Success
-                        loadUserInfo()
-                    } else {
-                        val msg = (data?.message?.ifEmpty { null } ?: resp.message)
-                            .ifEmpty { "登录失败" }
-                        _smsLoginStep.value = SmsLoginStep.Error(msg)
-                        _toast.value = msg
+            try {
+                _smsLoginStep.value = SmsLoginStep.LoggingIn
+                when (val result = authRepository.loginWithSms(
+                    cid = pendingCid,
+                    tel = pendingTel,
+                    code = code,
+                    captchaKey = key
+                )) {
+                    is Result.Success -> {
+                        val resp = result.data
+                        val data = resp.data
+                        if (resp.code == 0 && data?.isLogin == true) {
+                            _isLoggedIn.value = true
+                            _smsLoginStep.value = SmsLoginStep.Success
+                            loadUserInfo()
+                        } else {
+                            val msg = (data?.message?.ifEmpty { null } ?: resp.message)
+                                .ifEmpty { "登录失败" }
+                            _smsLoginStep.value = SmsLoginStep.Error(msg)
+                            _toast.value = msg
+                        }
                     }
+                    is Result.Error -> {
+                        _smsLoginStep.value = SmsLoginStep.Error(result.message)
+                        _toast.value = result.message
+                    }
+                    Result.Loading -> {}
                 }
-                is Result.Error -> {
-                    _smsLoginStep.value = SmsLoginStep.Error(result.message)
-                    _toast.value = result.message
-                }
-                Result.Loading -> {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _smsLoginStep.value = SmsLoginStep.Error(e.message ?: "登录失败")
+                _toast.value = e.message ?: "登录失败"
             }
         }
     }
@@ -363,7 +399,8 @@ class AuthViewModel @Inject constructor(
 
     /**
      * 从持久化 Cookie 中恢复基本用户信息（mid）。
-     * 在 nav 接口不可达或返回未登录时作为兜底，确保「我的」页面不会误显示「未登录」。
+     * 仅在 nav 接口暂时不可达时作为兜底，确保「我的」页面不闪烁「未登录」。
+     * 注意：此兜底信息会在 nav 成功后被真实数据覆盖。
      */
     private fun restoreBasicUserInfo() {
         try {
@@ -383,42 +420,39 @@ class AuthViewModel @Inject constructor(
     }
 
     fun loadUserInfo() {
-        viewModelScope.launch {
+        // 防重入：取消上一个未完成的 nav 请求，避免并发导致状态混乱
+        userJob?.cancel()
+        userJob = viewModelScope.launch {
             try {
                 when (val result = authRepository.getUserInfo()) {
-                    is Result.Success -> {
-                        val userInfo = result.data
-                        if (userInfo != null) {
-                            // nav 明确返回 isLogin=true：更新完整用户信息
-                            _userInfo.value = userInfo
-                            preferencesManager.saveUserInfo(
-                                id = userInfo.mid.toString(),
-                                name = userInfo.name,
-                                avatar = userInfo.face
-                            )
-                        } else {
-                            // nav 返回 isLogin=false 或 code!=0：
-                            // 不立即登出！Cookie 可能仍在生效（接口偶发失败、
-                            // 风控拦截等）。保持 isLoggedIn=true（基于 Cookie 存在），
-                            // 用户可手动退出登录。这是修复「我的页面显示未登录」的关键。
-                            // 仅当 _userInfo 为空时，用 Cookie 中的 mid 做兜底显示。
-                            if (_userInfo.value == null) {
-                                restoreBasicUserInfo()
-                            }
+                    is NavResult.LoggedIn -> {
+                        // 接口明确返回已登录：更新完整用户信息并持久化
+                        _userInfo.value = result.userInfo
+                        preferencesManager.saveUserInfo(
+                            id = result.userInfo.mid.toString(),
+                            name = result.userInfo.name,
+                            avatar = result.userInfo.face
+                        )
+                    }
+                    is NavResult.NotLoggedIn -> {
+                        // 接口明确返回未登录（code=-101 或 isLogin=false）：
+                        // 说明 Cookie 已真正失效，应当登出。
+                        if (_isLoggedIn.value) {
+                            _toast.value = "登录已失效，请重新登录"
+                            logout()
                         }
                     }
-                    is Result.Error -> {
-                        // 网络异常不登出——临时网络问题不应导致用户被登出。
-                        // 用 Cookie 中的 mid 做兜底，避免「我的」页面显示未登录。
+                    is NavResult.Failed -> {
+                        // 网络/解析错误：Cookie 可能仍有效，不登出。
+                        // 用 Cookie 中的 mid 做兜底，避免「我的」页面误显示未登录。
                         if (_userInfo.value == null) {
                             restoreBasicUserInfo()
                         }
                     }
-                    Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // 任何异常都不登出，用兜底信息显示
+                // 兜底：异常时不登出，尽量显示已有信息
                 if (_userInfo.value == null) {
                     restoreBasicUserInfo()
                 }
@@ -460,6 +494,7 @@ class AuthViewModel @Inject constructor(
         super.onCleared()
         pollJob?.cancel()
         countdownJob?.cancel()
+        userJob?.cancel()
     }
 }
 

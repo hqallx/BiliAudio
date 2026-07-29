@@ -620,6 +620,11 @@ private fun SmsContent(
  * 用户在B站 App 内点确认后，本应用后台的轮询会检测到登录成功并提取 Cookie。
  *
  * 若未安装B站 App，回退到系统浏览器打开该链接。
+ *
+ * 注意：不依赖 resolveActivity 判断——在 Android 11+ 包可见性限制下，
+ * 即使声明了 <queries>，resolveActivity 对隐式 intent 仍可能返回 null。
+ * 改为直接 startActivity 并捕获 ActivityNotFoundException，更稳健。
+ *
  * 参考：BBPlayer 的 WebBrowser.openBrowserAsync(qrcodeUrl) 实现；
  *      bilibili-API-collect 的 web 端扫码登录流程。
  */
@@ -632,37 +637,35 @@ private fun openBiliClientAuth(context: Context, url: String) {
         "com.bilibili.app.blue"      // 哔哩哔哩（概念版/蓝色版）
     )
 
-    // 1. 优先尝试直接拉起B站 App
+    // 1. 优先尝试直接拉起B站 App（捕获 ActivityNotFoundException 表示未安装该包）
     for (pkg in biliPackages) {
         val biliIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             setPackage(pkg)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        if (biliIntent.resolveActivity(context.packageManager) != null) {
-            runCatching { context.startActivity(biliIntent) }
-                .onFailure {
-                    Toast.makeText(
-                        context,
-                        "打开B站客户端失败，请重试或使用扫码登录",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            return
+        try {
+            context.startActivity(biliIntent)
+            return // 拉起成功
+        } catch (e: android.content.ActivityNotFoundException) {
+            // 该包名未安装，继续尝试下一个
+        } catch (e: SecurityException) {
+            // setPackage 被安全策略拒绝，继续尝试下一个
         }
     }
 
-    // 2. 未安装B站 App，回退到系统浏览器
+    // 2. 未安装B站 App，回退到系统浏览器（隐式 intent）
     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    runCatching { context.startActivity(browserIntent) }
-        .onFailure {
-            Toast.makeText(
-                context,
-                "无法打开授权页面，请安装B站App或使用扫码登录",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+    try {
+        context.startActivity(browserIntent)
+    } catch (e: android.content.ActivityNotFoundException) {
+        Toast.makeText(
+            context,
+            "无法打开授权页面，请安装B站App或使用扫码登录",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 }
 
 /**
