@@ -80,7 +80,10 @@ fun BiliAudioTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            // 状态栏透明：内容延伸到状态栏下方，由各页面自行处理状态栏内边距，
+            // 实现「任何时候状态栏透明」的全屏沉浸效果。
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

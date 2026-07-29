@@ -59,10 +59,14 @@ interface BiliApi {
 
     /**
      * 获取用户空间的合集与系列列表。
-     * 接口：x/polymer/web-space/home/seasons_series
-     * 返回 items 数组，每个 item.meta 包含合集元数据（标题、封面、视频数）。
+     * 接口：x/polymer/web-space/seasons_series_list
+     *
+     * 注意：曾误用 home/seasons_series 接口，该接口仅返回系列（series_list），
+     * seasons_list 恒为空，导致「无法检测到合集」。正确接口是
+     * seasons_series_list（无 home 段），其 items_lists.seasons_list 才包含合集。
+     * 鉴权：User-Agent 正常即可，Referer 已由全局拦截器附加。
      */
-    @GET("x/polymer/web-space/home/seasons_series")
+    @GET("x/polymer/web-space/seasons_series_list")
     suspend fun getSeasonsSeries(
         @Query("mid") mid: Long,
         @Query("page_num") pageNum: Int = 1,
