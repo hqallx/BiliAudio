@@ -31,11 +31,12 @@ class WbiSignInterceptor @Inject constructor(
             return chain.proceed(request)
         }
 
-        // 收集 Retrofit 已拼好的查询参数（@Query 注入的值）
+        // 收集 Retrofit 已拼好的查询参数（@Query 注入的值）。
+        // OkHttp 的 queryParameterName/queryParameterValue 返回 String?，需判空。
         val params = LinkedHashMap<String, String>(url.querySize)
         for (i in 0 until url.querySize) {
-            val name = url.queryParameterName(i)
-            val value = url.queryParameterValue(i)
+            val name = url.queryParameterName(i) ?: continue
+            val value = url.queryParameterValue(i) ?: ""
             if (name.isNotEmpty()) {
                 params[name] = value
             }
@@ -56,7 +57,7 @@ class WbiSignInterceptor @Inject constructor(
         val builder = original.newBuilder()
         // 先移除原有查询参数
         val originalNames = (0 until original.querySize)
-            .map { original.queryParameterName(it) }
+            .mapNotNull { original.queryParameterName(it) }
             .distinct()
         for (name in originalNames) {
             builder.removeAllQueryParameters(name)
