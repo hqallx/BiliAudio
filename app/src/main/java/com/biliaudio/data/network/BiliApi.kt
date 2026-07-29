@@ -37,4 +37,50 @@ interface BiliApi {
         @Query("fnver") fnver: Int = 0,
         @Query("fourk") fourk: Int = 1
     ): BiliResponse<VideoStreamResponse>
+
+    // ============ 合集（seasons） ============
+
+    /**
+     * 获取用户空间的合集与系列列表。
+     * 接口：x/polymer/web-space/home/seasons_series
+     * 返回 items 数组，每个 item.meta 包含合集元数据（标题、封面、视频数）。
+     */
+    @GET("x/polymer/web-space/home/seasons_series")
+    suspend fun getSeasonsSeries(
+        @Query("mid") mid: Long,
+        @Query("page_num") pageNum: Int = 1,
+        @Query("page_size") pageSize: Int = 20
+    ): BiliResponse<SeasonsSeriesResponse>
+
+    /**
+     * 获取指定合集内的视频列表。
+     * 接口：x/polymer/web-space/seasons_archives_list
+     * 返回 archives 数组（aid/bvid/title/pic/duration）。
+     */
+    @GET("x/polymer/web-space/seasons_archives_list")
+    suspend fun getSeasonArchives(
+        @Query("mid") mid: Long,
+        @Query("season_id") seasonId: Long,
+        @Query("page_num") pageNum: Int = 1,
+        @Query("page_size") pageSize: Int = 30,
+        @Query("sort_reverse") sortReverse: Boolean = false
+    ): BiliResponse<SeasonArchivesResponse>
+
+    // ============ 播放历史 ============
+
+    /**
+     * 获取当前登录用户的播放历史（游标分页）。
+     * 接口：x/web-interface/history/cursor
+     * 基于 Cookie 认证，type=archive 仅返回稿件视频（适合音频播放）。
+     *
+     * @param max 上一次返回最后一条的 oid，用于翻页
+     * @param viewAt 上一次返回最后一条的 view_at，用于翻页
+     */
+    @GET("x/web-interface/history/cursor")
+    suspend fun getHistory(
+        @Query("type") type: String = "archive",
+        @Query("ps") pageSize: Int = 20,
+        @Query("max") max: Long = 0,
+        @Query("view_at") viewAt: Long = 0
+    ): BiliResponse<HistoryResponse>
 }

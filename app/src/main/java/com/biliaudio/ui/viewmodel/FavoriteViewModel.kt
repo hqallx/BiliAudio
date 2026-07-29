@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.FavoriteFolder
+import com.biliaudio.data.model.HistoryItem
+import com.biliaudio.data.model.SeasonMeta
 import com.biliaudio.data.model.VideoItem
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
@@ -49,19 +51,39 @@ class FavoriteViewModel @Inject constructor(
 
     private val _searchKeyword = MutableStateFlow("")
 
+    // ============ 合集 ============
+
+    private val _seasons = MutableStateFlow<List<SeasonMeta>>(emptyList())
+    val seasons: StateFlow<List<SeasonMeta>> = _seasons.asStateFlow()
+
+    private val _isLoadingSeasons = MutableStateFlow(false)
+    val isLoadingSeasons: StateFlow<Boolean> = _isLoadingSeasons.asStateFlow()
+
+    // ============ 播放历史 ============
+
+    private val _history = MutableStateFlow<List<HistoryItem>>(emptyList())
+    val history: StateFlow<List<HistoryItem>> = _history.asStateFlow()
+
+    private val _isLoadingHistory = MutableStateFlow(false)
+    val isLoadingHistory: StateFlow<Boolean> = _isLoadingHistory.asStateFlow()
+
     init {
         viewModelScope.launch {
             try {
                 val userId = authRepository.getCurrentUserId()
                 if (userId != null) {
                     loadFolders(userId)
+                    loadSeasons(userId)
                 } else {
                     // 回退：从 preferences 读取
                     val idStr = preferencesManager.userId.first()
                     if (idStr.isNotEmpty()) {
-                        loadFolders(idStr.toLong())
+                        val mid = idStr.toLong()
+                        loadFolders(mid)
+                        loadSeasons(mid)
                     }
                 }
+                loadHistory()
             } catch (e: Exception) {
                 // DataStore 读取或 Cookie 访问失败不应导致应用崩溃。
                 // 用户可手动下拉刷新重新加载。
@@ -157,10 +179,126 @@ class FavoriteViewModel @Inject constructor(
             val mid = authRepository.getCurrentUserId()
             if (mid != null) {
                 loadFolders(mid)
+                loadSeasons(mid)
             }
+            loadHistory()
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    // ============ 合集 ============
+
+    fun loadSeasons(mid: Long) {
+        viewModelScope.launch {
+            _isLoadingSeasons.value = true
+            try {
+                when (val result = favoriteRepository.getSeasonsSeries(mid)) {
+                    is Result.Success -> {
+                        val response = result.data
+                        if (response.code == 0 && response.data != null) {
+                            _seasons.value = response.data.items
+                                .mapNotNull { it.meta }
+                                .filter { it.season_id != 0L }
+                        } else {
+                            _toast.value = response.message
+                        }
+                    }
+                    is Result.Error -> {
+                        _toast.value = "加载合集失败: ${result.message}"
+                    }
+                    Result.Loading -> {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            _isLoadingSeasons.value = false
+        }
+    }
+
+    /**
+     * 加载指定合集内的视频列表，结果写入 [videos]/[filteredVideos]，
+     * 供 VideoListScreen 复用展示与播放。
+     */
+    fun loadSeasonVideos(mid: Long, seasonId: Long) {
+        viewModelScope.launch {
+            _isLoadingVideos.value = true
+            try {
+                when (val result = favoriteRepository.getSeasonArchives(mid, seasonId)) {
+                    is Result.Success -> {
+                        val response = result.data
+                        if (response.code == 0 && response.data != null) {
+                            _videos.value = response.data.archives.map { it.toVideoItem() }
+                            applySearchFilter()
+                        } else {
+                            _toast.value = response.message
+                        }
+                    }
+                    is Result.Error -> {
+                        _toast.value = "加载合集视频失败: ${result.message}"
+                    }
+                    Result.Loading -> {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            _isLoadingVideos.value = false
+        }
+    }
+
+    /**
+     * 自动获取当前用户 mid 后加载合集视频，供 UI 层无需关心 mid 时调用。
+     */
+    fun loadSeasonVideosAuto(seasonId: Long) {
+        viewModelScope.launch {
+            try {
+                val mid = authRepository.getCurrentUserId()
+                if (mid != null) {
+                    loadSeasonVideos(mid, seasonId)
+                } else {
+                    _toast.value = "未登录，无法加载合集"
+                    _isLoadingVideos.value = false
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _isLoadingVideos.value = false
+            }
+        }
+    }
+
+    // ============ 播放历史 ============
+
+    fun loadHistory() {
+        viewModelScope.launch {
+            _isLoadingHistory.value = true
+            try {
+                when (val result = favoriteRepository.getHistory()) {
+                    is Result.Success -> {
+                        val response = result.data
+                        if (response.code == 0 && response.data != null) {
+                            // 仅保留可转为 VideoItem 的稿件历史
+                            _history.value = response.data.list
+                                .filter { it.history?.business == "archive" }
+                        } else {
+                            _toast.value = response.message
+                        }
+                    }
+                    is Result.Error -> {
+                        _toast.value = "加载历史记录失败: ${result.message}"
+                    }
+                    Result.Loading -> {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            _isLoadingHistory.value = false
+        }
+    }
+
+    /** 将历史记录项转为 VideoItem，用于播放。 */
+    suspend fun historyItemToTrack(item: HistoryItem): com.biliaudio.data.model.Track? {
+        val video = item.toVideoItem() ?: return null
+        return videoToTrack(video)
     }
 
     fun consumeToast() {

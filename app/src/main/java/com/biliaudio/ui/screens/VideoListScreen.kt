@@ -28,6 +28,7 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,11 +45,15 @@ import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 
+/** 视频列表的数据来源，区分收藏夹与合集。 */
+enum class VideoListSource { FAVORITE, SEASON }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoListScreen(
     folderId: Long,
     folderName: String,
+    source: VideoListSource = VideoListSource.FAVORITE,
     favoriteViewModel: FavoriteViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     onBackClick: () -> Unit = {}
@@ -59,6 +64,16 @@ fun VideoListScreen(
     var isLoadingAudio by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
+
+    // 进入页面时根据来源触发加载：
+    // - FAVORITE: folderId 为收藏夹 mediaId
+    // - SEASON: folderId 为合集 seasonId（mid 由 ViewModel 自动获取）
+    LaunchedEffect(folderId, source) {
+        when (source) {
+            VideoListSource.FAVORITE -> favoriteViewModel.loadVideos(folderId)
+            VideoListSource.SEASON -> favoriteViewModel.loadSeasonVideosAuto(folderId)
+        }
+    }
 
     Scaffold(
         topBar = {

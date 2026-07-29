@@ -233,3 +233,122 @@ data class SmsLoginResponse(
     @SerialName("isLogin")
     val isLogin: Boolean = false
 )
+
+// ============ 合集（seasons）相关 ============
+// 接口：x/polymer/web-space/home/seasons_series
+
+@Serializable
+data class SeasonsSeriesResponse(
+    val items: List<SeasonItem> = emptyList(),
+    val page: SeasonPage = SeasonPage()
+)
+
+@Serializable
+data class SeasonItem(
+    val meta: SeasonMeta? = null
+)
+
+@Serializable
+data class SeasonMeta(
+    val season_id: Long = 0,
+    val mid: Long = 0,
+    val name: String = "",
+    val cover: String = "",
+    val description: String = "",
+    val total: Int = 0,
+    val ptime: Long = 0
+)
+
+@Serializable
+data class SeasonPage(
+    val page_num: Int = 1,
+    val page_size: Int = 20,
+    val total: Int = 0
+)
+
+// 接口：x/polymer/web-space/seasons_archives_list
+@Serializable
+data class SeasonArchivesResponse(
+    val archives: List<SeasonArchive> = emptyList(),
+    val meta: SeasonMeta? = null,
+    val page: SeasonPage = SeasonPage()
+)
+
+@Serializable
+data class SeasonArchive(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val title: String = "",
+    val pic: String = "",
+    val duration: Int = 0,
+    val pubdate: Long = 0,
+    val stat: SeasonStat? = null
+) {
+    /** 合集视频字段名与 VideoItem 不同（pic vs cover），在此做映射。 */
+    fun toVideoItem(): VideoItem = VideoItem(
+        id = aid,
+        aid = aid,
+        bvid = bvid,
+        title = title,
+        cover = pic,
+        duration = duration
+    )
+}
+
+@Serializable
+data class SeasonStat(
+    val view: Int = 0
+)
+
+// ============ 播放历史相关 ============
+// 接口：x/web-interface/history/cursor
+
+@Serializable
+data class HistoryResponse(
+    val list: List<HistoryItem> = emptyList(),
+    val cursor: HistoryCursor = HistoryCursor()
+)
+
+@Serializable
+data class HistoryItem(
+    val title: String = "",
+    val cover: String = "",
+    val view_at: Long = 0,
+    val progress: Int = 0,
+    val duration: Int = 0,
+    val history: HistoryDetail? = null
+) {
+    /**
+     * 映射为 VideoItem，仅处理稿件(archive)类型的历史记录。
+     * 番剧/直播/文章等类型不适用于音频播放，跳过。
+     */
+    fun toVideoItem(): VideoItem? {
+        val detail = history ?: return null
+        if (detail.business != "archive") return null
+        val aid = detail.oid
+        if (aid == 0L) return null
+        return VideoItem(
+            id = aid,
+            aid = aid,
+            bvid = detail.bvid,
+            title = title,
+            cover = cover,
+            duration = duration
+        )
+    }
+}
+
+@Serializable
+data class HistoryDetail(
+    val oid: Long = 0,
+    val bvid: String = "",
+    val business: String = "",
+    val cid: Long = 0
+)
+
+@Serializable
+data class HistoryCursor(
+    val max: Long = 0,
+    val business: String = "",
+    val view_at: Long = 0
+)

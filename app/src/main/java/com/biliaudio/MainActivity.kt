@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,11 +42,12 @@ import androidx.navigation.compose.rememberNavController
 import com.biliaudio.player.PlaybackService
 import com.biliaudio.ui.components.MiniPlayer
 import com.biliaudio.ui.components.PlayerScreen
-import com.biliaudio.ui.screens.FavoriteScreen
+import com.biliaudio.ui.screens.LibraryScreen
 import com.biliaudio.ui.screens.LoginScreen
 import com.biliaudio.ui.screens.PlaylistScreen
 import com.biliaudio.ui.screens.ProfileScreen
 import com.biliaudio.ui.screens.VideoListScreen
+import com.biliaudio.ui.screens.VideoListSource
 import com.biliaudio.ui.theme.BiliAudioTheme
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
@@ -132,7 +133,7 @@ fun AppRoot(
     }
 
     val items = listOf(
-        BottomNavItem("favorite", "收藏", Icons.Default.Favorite),
+        BottomNavItem("library", "库", Icons.Default.LibraryBooks),
         BottomNavItem("playlist", "播放列表", Icons.Default.QueueMusic),
         BottomNavItem("profile", "我的", Icons.Default.Person)
     )
@@ -197,25 +198,29 @@ fun AppRoot(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = if (isLoggedIn) "favorite" else "login"
+                startDestination = if (isLoggedIn) "library" else "login"
             ) {
                 composable("login") {
                     LoginScreen(
                         authViewModel = authViewModel,
                         onLoginSuccess = {
-                            navController.navigate("favorite") {
+                            navController.navigate("library") {
                                 popUpTo(0) { inclusive = true }
                             }
                         }
                     )
                 }
 
-                composable("favorite") {
-                    FavoriteScreen(
+                composable("library") {
+                    LibraryScreen(
                         favoriteViewModel = favoriteViewModel,
                         authViewModel = authViewModel,
+                        playerViewModel = playerViewModel,
                         onFolderClick = { folderId, folderName ->
                             navController.navigate("videos/$folderId/$folderName")
+                        },
+                        onSeasonClick = { seasonId, seasonName ->
+                            navController.navigate("season/$seasonId/$seasonName")
                         },
                         onLoginClick = {
                             navController.navigate("login")
@@ -229,6 +234,20 @@ fun AppRoot(
                     VideoListScreen(
                         folderId = folderId,
                         folderName = folderName,
+                        source = VideoListSource.FAVORITE,
+                        favoriteViewModel = favoriteViewModel,
+                        playerViewModel = playerViewModel,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
+
+                composable("season/{seasonId}/{seasonName}") { backStackEntry ->
+                    val seasonId = backStackEntry.arguments?.getString("seasonId")?.toLong() ?: 0L
+                    val seasonName = backStackEntry.arguments?.getString("seasonName") ?: ""
+                    VideoListScreen(
+                        folderId = seasonId,
+                        folderName = seasonName,
+                        source = VideoListSource.SEASON,
                         favoriteViewModel = favoriteViewModel,
                         playerViewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() }
