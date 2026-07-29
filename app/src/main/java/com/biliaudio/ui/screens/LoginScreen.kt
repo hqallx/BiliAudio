@@ -122,19 +122,6 @@ fun LoginScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 右上角「跳过」按钮：直接进入主界面浏览（无需登录）
-        TextButton(
-            onClick = { onLoginSuccess() },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-        ) {
-            Text(
-                text = "跳过",
-                style = MaterialTheme.typography.titleSmall
-            )
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -215,6 +202,21 @@ fun LoginScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
+            )
+        }
+
+        // 右上角「跳过」按钮：直接进入主界面浏览（无需登录）
+        // 注意：必须放在 Column 之后声明，使其绘制在 Column 之上层。
+        // 之前放在 Column 之前，被 fillMaxSize 的 Column 覆盖，导致点击事件被拦截。
+        TextButton(
+            onClick = { onLoginSuccess() },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+        ) {
+            Text(
+                text = "跳过",
+                style = MaterialTheme.typography.titleSmall
             )
         }
     }
