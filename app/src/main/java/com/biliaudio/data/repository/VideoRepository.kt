@@ -24,13 +24,16 @@ class VideoRepository @Inject constructor(
 
     suspend fun getVideoStream(
         bvid: String = "",
-        aid: Long = 0
+        aid: Long = 0,
+        cid: Long = 0
     ): Result<BiliResponse<VideoStreamResponse>> = resultOf {
-        api.getVideoStream(bvid = bvid, aid = aid)
+        api.getVideoStream(bvid = bvid, aid = aid, cid = cid)
     }
 
     /**
      * 获取视频的音频流地址，带缓存。
+     * B站 playurl 接口要求 cid 参数，若 [video] 中无 cid 则先通过
+     * x/web-interface/view 接口获取。
      */
     suspend fun getAudioUrl(video: VideoItem): Result<String> {
         val key = video.bvid.ifEmpty { video.aid.toString() }
@@ -44,7 +47,25 @@ class VideoRepository @Inject constructor(
             }
         }
 
-        return when (val result = getVideoStream(bvid = video.bvid, aid = video.aid)) {
+        // playurl 接口的 cid 是必需参数，缺失时服务端返回 -400/-404。
+        // 收藏夹/合集/历史接口返回的 VideoItem 不含 cid，需先获取。
+        var cid = video.cid
+        if (cid == 0L) {
+            when (val infoResult = resultOf {
+                api.getVideoInfo(bvid = video.bvid, aid = video.aid)
+            }) {
+                is Result.Success -> {
+                    cid = infoResult.data.data?.cid ?: 0L
+                }
+                is Result.Error -> return infoResult
+                Result.Loading -> return Result.Loading
+            }
+            if (cid == 0L) {
+                return Result.Error(IllegalStateException("No cid"), "无法获取视频 cid")
+            }
+        }
+
+        return when (val result = getVideoStream(bvid = video.bvid, aid = video.aid, cid = cid)) {
             is Result.Success -> {
                 val audioItem = result.data.data?.dash?.audio?.firstOrNull()
                 val url = audioItem?.url?.toHttpsUrl()
@@ -77,7 +98,8 @@ class VideoRepository @Inject constructor(
                     audioUrl = urlResult.data,
                     duration = video.duration.toLong() * 1000,
                     bvid = video.bvid,
-                    aid = video.aid
+                    aid = video.aid,
+                    cid = video.cid
                 )
             )
             is Result.Error -> urlResult

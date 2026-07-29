@@ -436,11 +436,31 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                     is NavResult.NotLoggedIn -> {
-                        // 接口明确返回未登录（code=-101 或 isLogin=false）：
-                        // 说明 Cookie 已真正失效，应当登出。
+                        // 接口明确返回未登录（code=-101 或 isLogin=false）。
+                        // 冷启动时可能因瞬时网络抖动或服务端缓存导致误判，
+                        // 延迟 2 秒后重试一次，仍 NotLoggedIn 才真正登出。
                         if (_isLoggedIn.value) {
-                            _toast.value = "登录已失效，请重新登录"
-                            logout()
+                            delay(2000)
+                            when (val retry = authRepository.getUserInfo()) {
+                                is NavResult.LoggedIn -> {
+                                    _userInfo.value = retry.userInfo
+                                    preferencesManager.saveUserInfo(
+                                        id = retry.userInfo.mid.toString(),
+                                        name = retry.userInfo.name,
+                                        avatar = retry.userInfo.face
+                                    )
+                                }
+                                is NavResult.NotLoggedIn -> {
+                                    _toast.value = "登录已失效，请重新登录"
+                                    logout()
+                                }
+                                is NavResult.Failed -> {
+                                    // 重试失败：Cookie 可能仍有效，不登出
+                                    if (_userInfo.value == null) {
+                                        restoreBasicUserInfo()
+                                    }
+                                }
+                            }
                         }
                     }
                     is NavResult.Failed -> {

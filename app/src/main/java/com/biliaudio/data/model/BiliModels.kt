@@ -93,7 +93,8 @@ data class VideoItem(
     val upper: Upper? = null,
     val attr: Int = 0,
     val bvid: String = "",
-    val aid: Long = 0
+    val aid: Long = 0,
+    val cid: Long = 0
 )
 
 @Serializable
@@ -115,6 +116,21 @@ data class VideoStreamResponse(
     @SerialName("accept_quality")
     val acceptQuality: List<Int> = emptyList(),
     val dash: DashData? = null
+)
+
+/**
+ * /x/web-interface/view 返回的视频信息。
+ * 主要用于获取 cid（playurl 接口的必需参数）。
+ */
+@Serializable
+data class VideoInfoResponse(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val cid: Long = 0,
+    val title: String = "",
+    val pic: String = "",
+    val duration: Int = 0,
+    val owner: Upper? = null
 )
 
 @Serializable

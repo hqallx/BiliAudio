@@ -16,8 +16,13 @@ interface BiliApi {
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): BiliResponse<NavInfo>
 
-    @GET("x/v3/fav/folder/created/list-all")
-    suspend fun getFavoriteFolders(@Query("up_mid") mid: Long): BiliResponse<FavoriteListResponse>
+    @GET("x/v3/fav/folder/created/list")
+    suspend fun getFavoriteFolders(
+        @Query("up_mid") mid: Long,
+        @Query("type") type: Int = 0,
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20
+    ): BiliResponse<FavoriteListResponse>
 
     @GET("x/v3/fav/resource/list")
     suspend fun getFavoriteResources(
@@ -28,10 +33,22 @@ interface BiliApi {
         @Query("order") order: String = "mtime"
     ): BiliResponse<FavoriteResourceResponse>
 
+    /**
+     * 获取视频信息（含 cid）。
+     * 接口：x/web-interface/view
+     * cid 是 playurl 接口的必需参数，必须先通过本接口获取。
+     */
+    @GET("x/web-interface/view")
+    suspend fun getVideoInfo(
+        @Query("bvid") bvid: String = "",
+        @Query("aid") aid: Long = 0
+    ): BiliResponse<VideoInfoResponse>
+
     @GET("x/player/wbi/playurl")
     suspend fun getVideoStream(
         @Query("bvid") bvid: String = "",
         @Query("aid") aid: Long = 0,
+        @Query("cid") cid: Long = 0,
         @Query("qn") qn: Int = 64,
         @Query("fnval") fnval: Int = 16,
         @Query("fnver") fnver: Int = 0,

@@ -70,10 +70,15 @@ class WbiSignInterceptor @Inject constructor(
     }
 
     companion object {
-        /** 需要附加 WBI 签名的接口路径片段。 */
+        /**
+         * 需要附加 WBI 签名的接口路径片段。
+         * 仅对路径含 /wbi/ 的接口签名（B站惯例：WBI 接口路径带 wbi 段）。
+         * seasons_series / seasons_archives_list 等 polymer 接口路径不含 /wbi/，
+         * 其 w_rid 参数为「可选」，不签名也能正常访问；强制签名反而会在
+         * WBI 密钥未就绪（冷启动竞态）时导致请求失败。
+         */
         private val WBI_REQUIRED_PATHS = arrayOf(
-            "wbi/playurl",
-            "polymer/web-space"
+            "wbi/playurl"
         )
     }
 }

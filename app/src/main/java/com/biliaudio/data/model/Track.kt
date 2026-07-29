@@ -11,5 +11,6 @@ data class Track(
     val audioUrl: String,
     val duration: Long = 0,
     val bvid: String = "",
-    val aid: Long = 0
+    val aid: Long = 0,
+    val cid: Long = 0
 )
