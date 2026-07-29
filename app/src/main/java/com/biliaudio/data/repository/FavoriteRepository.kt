@@ -3,12 +3,11 @@ package com.biliaudio.data.repository
 import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.BiliResponse
-import com.biliaudio.data.model.FavoriteFolder
+import com.biliaudio.data.model.CollectedListResponse
 import com.biliaudio.data.model.FavoriteListResponse
 import com.biliaudio.data.model.FavoriteResourceResponse
 import com.biliaudio.data.model.HistoryResponse
-import com.biliaudio.data.model.SeasonArchivesResponse
-import com.biliaudio.data.model.SeasonsSeriesResponse
+import com.biliaudio.data.model.SeasonListResponse
 import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.resultOf
 import javax.inject.Inject
@@ -35,30 +34,27 @@ class FavoriteRepository @Inject constructor(
 
     // ============ 合集 ============
 
-    suspend fun getSeasonsSeries(
+    /**
+     * 获取当前登录用户追更的合集与收藏夹列表。
+     * 仅返回 attr==0 的追更视频合集（season），过滤掉订阅的他人收藏夹(attr=22)和已失效项。
+     */
+    suspend fun getCollectedSeasons(
         mid: Long,
-        pageNum: Int = 1,
+        page: Int = 1,
         pageSize: Int = 20
-    ): Result<BiliResponse<SeasonsSeriesResponse>> = resultOf {
-        api.getSeasonsSeries(mid, pageNum, pageSize)
+    ): Result<BiliResponse<CollectedListResponse>> = resultOf {
+        api.getCollectedList(mid, page, pageSize)
     }
 
-    suspend fun getSeasonArchives(
-        mid: Long,
+    /**
+     * 获取指定合集内的视频列表。
+     */
+    suspend fun getSeasonVideos(
         seasonId: Long,
-        pageNum: Int = 1,
-        pageSize: Int = 30
-    ): Result<BiliResponse<SeasonArchivesResponse>> = resultOf {
-        api.getSeasonArchives(mid, seasonId, pageNum, pageSize)
-    }
-
-    suspend fun getSeriesArchives(
-        mid: Long,
-        seriesId: Long,
-        pageNum: Int = 1,
-        pageSize: Int = 30
-    ): Result<BiliResponse<SeasonArchivesResponse>> = resultOf {
-        api.getSeriesArchives(mid, seriesId, pageNum, pageSize)
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Result<BiliResponse<SeasonListResponse>> = resultOf {
+        api.getSeasonList(seasonId, page, pageSize)
     }
 
     // ============ 播放历史 ============

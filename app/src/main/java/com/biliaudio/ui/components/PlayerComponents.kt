@@ -46,9 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
@@ -249,7 +246,7 @@ fun PlayerScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         // ===== 进度条 + 时间 =====
-        WaveProgressBar(
+        LinearProgressBar(
             currentPosition = currentPosition,
             duration = duration,
             onSeek = onSeek,
@@ -380,13 +377,14 @@ fun PlayerScreen(
 }
 
 /**
- * 波形进度条。
- * - 已播放部分：蓝色波形 + 当前播放竖线
- * - 未播放部分：浅灰条 + 末端圆点
+ * 普通线性进度条。
+ * - 已播放部分：蓝色圆角线
+ * - 未播放部分：浅灰圆角线
+ * - 末端圆形滑块
  * - 支持点击 / 拖动跳转到指定位置
  */
 @Composable
-private fun WaveProgressBar(
+private fun LinearProgressBar(
     currentPosition: Long,
     duration: Long,
     onSeek: (Long) -> Unit,
@@ -438,60 +436,35 @@ private fun WaveProgressBar(
             }
     ) {
         val w = size.width
-        val h = size.height
-        val centerY = h / 2f
-
+        val centerY = size.height / 2f
+        val trackHeight = (size.height * 0.16f).coerceAtLeast(6f)
         val playedEnd = w * progress
-        val dotRadius = h * 0.18f
+        val thumbRadius = trackHeight * 1.4f
 
-        // —— 未播放部分：浅灰条 ——
-        drawLine(
+        // —— 未播放部分：浅灰圆角条 ——
+        drawRoundRect(
             color = PlayerTrackBg,
-            start = Offset(0f, centerY),
-            end = Offset(w, centerY),
-            strokeWidth = h * 0.18f,
-            cap = StrokeCap.Round
+            topLeft = Offset(0f, centerY - trackHeight / 2f),
+            size = androidx.compose.ui.geometry.Size(w, trackHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight, trackHeight)
         )
 
-        // —— 未播放末端圆点 ——
-        drawCircle(
-            color = PlayerTextSecondary,
-            radius = dotRadius,
-            center = Offset(w, centerY)
-        )
-
-        // —— 已播放部分：蓝色波形（正弦波） ——
+        // —— 已播放部分：蓝色圆角条 ——
         if (playedEnd > 0f) {
-            val amplitude = h * 0.32f
-            val wavelength = 22f
-            val path = Path().apply {
-                var x = 0f
-                moveTo(0f, centerY)
-                var phase = 0f
-                while (x <= playedEnd) {
-                    val y = centerY + kotlin.math.sin(phase) * amplitude
-                    lineTo(x, y)
-                    // 与步长对应推进相位（2π per wavelength）
-                    val step = 1.5f
-                    x += step
-                    phase += (2f * Math.PI.toFloat()) * (step / wavelength)
-                }
-            }
-            drawPath(
-                path = path,
+            drawRoundRect(
                 color = PlayerBlue,
-                style = Stroke(width = h * 0.16f, cap = StrokeCap.Round)
-            )
-
-            // —— 当前播放位置竖线 ——
-            drawLine(
-                color = PlayerBlue,
-                start = Offset(playedEnd, centerY - h * 0.4f),
-                end = Offset(playedEnd, centerY + h * 0.4f),
-                strokeWidth = 3f,
-                cap = StrokeCap.Round
+                topLeft = Offset(0f, centerY - trackHeight / 2f),
+                size = androidx.compose.ui.geometry.Size(playedEnd, trackHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight, trackHeight)
             )
         }
+
+        // —— 末端圆形滑块 ——
+        drawCircle(
+            color = PlayerBlue,
+            radius = thumbRadius,
+            center = Offset(playedEnd, centerY)
+        )
     }
 }
 

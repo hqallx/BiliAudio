@@ -56,49 +56,35 @@ interface BiliApi {
     ): BiliResponse<VideoStreamResponse>
 
     // ============ 合集（seasons） ============
+    // 参考 BBPlayer：用 collected/list 获取追更合集，season/list 获取合集内视频。
+    // 这两个接口均无需 WBI 签名。
 
     /**
-     * 获取用户空间的合集与系列列表。
-     * 接口：x/polymer/web-space/seasons_series_list
+     * 获取当前登录用户追更/订阅的合集与收藏夹列表。
+     * 接口：x/v3/fav/folder/collected/list
      *
-     * 注意：曾误用 home/seasons_series 接口，该接口仅返回系列（series_list），
-     * seasons_list 恒为空，导致「无法检测到合集」。正确接口是
-     * seasons_series_list（无 home 段），其 items_lists.seasons_list 才包含合集。
-     * 鉴权：User-Agent 正常即可，Referer 已由全局拦截器附加。
+     * 注意：不同于 seasons_series_list（UP主自建合集，需WBI），本接口返回
+     * 「我追更的合集」，更符合用户预期。用 attr 字段区分合集(0)与收藏夹(22)。
      */
-    @GET("x/polymer/web-space/seasons_series_list")
-    suspend fun getSeasonsSeries(
-        @Query("mid") mid: Long,
-        @Query("page_num") pageNum: Int = 1,
-        @Query("page_size") pageSize: Int = 20
-    ): BiliResponse<SeasonsSeriesResponse>
+    @GET("x/v3/fav/folder/collected/list")
+    suspend fun getCollectedList(
+        @Query("up_mid") mid: Long,
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20,
+        @Query("platform") platform: String = "web"
+    ): BiliResponse<CollectedListResponse>
 
     /**
-     * 获取指定合集内的视频列表。
-     * 接口：x/polymer/web-space/seasons_archives_list
-     * 返回 archives 数组（aid/bvid/title/pic/duration）。
+     * 获取指定合集的详情与视频列表。
+     * 接口：x/space/fav/season/list
+     * 非登录亦可访问，返回 info + medias 数组。
      */
-    @GET("x/polymer/web-space/seasons_archives_list")
-    suspend fun getSeasonArchives(
-        @Query("mid") mid: Long,
+    @GET("x/space/fav/season/list")
+    suspend fun getSeasonList(
         @Query("season_id") seasonId: Long,
-        @Query("page_num") pageNum: Int = 1,
-        @Query("page_size") pageSize: Int = 30,
-        @Query("sort_reverse") sortReverse: Boolean = false
-    ): BiliResponse<SeasonArchivesResponse>
-
-    /**
-     * 获取指定系列内的视频列表。
-     * 接口：x/polymer/web-space/series/archives
-     * 系列与合集是两种内容组织形式，视频加载接口不同，但返回结构一致（archives 数组）。
-     */
-    @GET("x/polymer/web-space/series/archives")
-    suspend fun getSeriesArchives(
-        @Query("mid") mid: Long,
-        @Query("series_id") seriesId: Long,
-        @Query("page_num") pageNum: Int = 1,
-        @Query("page_size") pageSize: Int = 30
-    ): BiliResponse<SeasonArchivesResponse>
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20
+    ): BiliResponse<SeasonListResponse>
 
     // ============ 播放历史 ============
 

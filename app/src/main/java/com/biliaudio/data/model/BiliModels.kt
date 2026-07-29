@@ -264,35 +264,106 @@ data class SmsLoginResponse(
 )
 
 // ============ 合集（seasons）相关 ============
-// 接口：x/polymer/web-space/home/seasons_series
-// 注意：该接口返回 data.items_lists，内含 seasons_list（合集）与 series_list（系列）。
-// B站空间里合集与系列在同一页面展示，这里一并解析后合并展示。
+// 参考 BBPlayer (https://github.com/bbplayer-app/BBPlayer) 的合集方案：
+// - 列表用 /x/v3/fav/folder/collected/list 获取「当前登录用户追更的合集/收藏夹」，
+//   而非 /x/polymer/web-space/seasons_series_list（后者是某 UP 主自建的合集，需 WBI 签名，
+//   且追更视角下根本拿不到）。用 attr 字段区分合集(attr=0)与订阅收藏夹(attr=22)。
+// - 合集内视频用 /x/space/fav/season/list + season_id，无需 WBI，非登录亦可访问。
 
+/**
+ * /x/v3/fav/folder/collected/list 返回。
+ * 当前登录用户追更/订阅的合集与收藏夹列表。
+ */
 @Serializable
-data class SeasonsSeriesResponse(
-    val items_lists: SeasonItemsLists = SeasonItemsLists()
-)
-
-@Serializable
-data class SeasonItemsLists(
-    val seasons_list: List<SeasonListItem> = emptyList(),
-    val series_list: List<SeasonListItem> = emptyList(),
-    val page: SeasonPage = SeasonPage()
-)
-
-@Serializable
-data class SeasonListItem(
-    val meta: SeasonMeta? = null
+data class CollectedListResponse(
+    val list: List<CollectionItem> = emptyList(),
+    val count: Int = 0,
+    val has_more: Boolean = false
 )
 
 /**
- * 合集/系列元数据。
- * 合集用 season_id，系列用 series_id；通过 [businessId] / [isSeries] 统一访问。
- *
- * 注意：B站接口对 season_id / series_id 的返回类型不统一——有时是数字、
- * 有时是字符串。这里统一用 [String] 接收（isLenient 模式下数字会自动转字符串），
- * 再在 [businessId] 中按需 toLong，避免类型不匹配导致反序列化失败、
- * 合集被静默过滤掉（表现为「无法检测到合集」）。
+ * 追更合集/收藏夹列表中的单项。
+ * @property attr 0=追更视频合集(season)，22=关注的他人收藏夹，1=已失效
+ * @property state 0=正常，1=已失效
+ */
+@Serializable
+data class CollectionItem(
+    val id: Long = 0,
+    val title: String = "",
+    val cover: String = "",
+    val upper: Upper? = null,
+    @SerialName("media_count")
+    val mediaCount: Int = 0,
+    val ctime: Long = 0,
+    val intro: String = "",
+    val attr: Int = 0,
+    val state: Int = 0
+) {
+    /** 是否为追更视频合集（season），用 season/list 接口加载内容。 */
+    val isSeason: Boolean
+        get() = attr == 0
+
+    /** 是否已失效。 */
+    val isInvalid: Boolean
+        get() = state == 1
+
+    /** 转为 UI 层使用的 SeasonMeta，复用现有展示组件。 */
+    fun toSeasonMeta(): SeasonMeta = SeasonMeta(
+        season_id = id.toString(),
+        name = title,
+        cover = cover,
+        description = intro,
+        total = mediaCount,
+        mid = upper?.mid ?: 0L
+    )
+}
+
+/**
+ * /x/space/fav/season/list 返回的合集详情与视频列表。
+ */
+@Serializable
+data class SeasonListResponse(
+    val info: SeasonInfo = SeasonInfo(),
+    val medias: List<SeasonMedia>? = null
+)
+
+@Serializable
+data class SeasonInfo(
+    val id: Long = 0,
+    val title: String = "",
+    val cover: String = "",
+    val upper: Upper? = null,
+    @SerialName("media_count")
+    val mediaCount: Int = 0,
+    val intro: String = ""
+)
+
+@Serializable
+data class SeasonMedia(
+    val id: Long = 0,
+    val bvid: String = "",
+    val title: String = "",
+    val cover: String = "",
+    val duration: Int = 0,
+    val pubtime: Long = 0,
+    val upper: Upper? = null
+) {
+    /** 合集内视频字段名与 VideoItem 不同（cover vs pic），在此做映射。 */
+    fun toVideoItem(): VideoItem = VideoItem(
+        id = id,
+        aid = id,
+        bvid = bvid,
+        title = title,
+        cover = cover,
+        duration = duration,
+        upper = upper
+    )
+}
+
+// ============ 以下为旧合集模型（保留 SeasonMeta 供 UI 复用，其余已废弃） ============
+
+/**
+ * 合集元数据。UI 层（LibraryScreen/SeasonsTab/FolderCard）依赖此模型展示。
  */
 @Serializable
 data class SeasonMeta(
@@ -309,17 +380,13 @@ data class SeasonMeta(
     val seasonIdLong: Long
         get() = season_id.toLongOrNull() ?: 0L
 
-    /** series_id 转为 Long（无法解析或为 "0" 时返回 0）。 */
-    val seriesIdLong: Long
-        get() = series_id.toLongOrNull() ?: 0L
-
-    /** 统一业务 id：合集取 season_id，系列取 series_id。 */
+    /** 统一业务 id：合集取 season_id。 */
     val businessId: Long
-        get() = if (seasonIdLong != 0L) seasonIdLong else seriesIdLong
+        get() = seasonIdLong
 
-    /** 是否为系列（而非合集），决定视频列表走哪个接口。 */
+    /** 新方案下均为合集（season），走 season/list 接口。 */
     val isSeries: Boolean
-        get() = seasonIdLong == 0L && seriesIdLong != 0L
+        get() = false
 }
 
 @Serializable
@@ -327,40 +394,6 @@ data class SeasonPage(
     val page_num: Int = 1,
     val page_size: Int = 20,
     val total: Int = 0
-)
-
-// 接口：x/polymer/web-space/seasons_archives_list
-@Serializable
-data class SeasonArchivesResponse(
-    val archives: List<SeasonArchive> = emptyList(),
-    val meta: SeasonMeta? = null,
-    val page: SeasonPage = SeasonPage()
-)
-
-@Serializable
-data class SeasonArchive(
-    val aid: Long = 0,
-    val bvid: String = "",
-    val title: String = "",
-    val pic: String = "",
-    val duration: Int = 0,
-    val pubdate: Long = 0,
-    val stat: SeasonStat? = null
-) {
-    /** 合集视频字段名与 VideoItem 不同（pic vs cover），在此做映射。 */
-    fun toVideoItem(): VideoItem = VideoItem(
-        id = aid,
-        aid = aid,
-        bvid = bvid,
-        title = title,
-        cover = pic,
-        duration = duration
-    )
-}
-
-@Serializable
-data class SeasonStat(
-    val view: Int = 0
 )
 
 // ============ 播放历史相关 ============

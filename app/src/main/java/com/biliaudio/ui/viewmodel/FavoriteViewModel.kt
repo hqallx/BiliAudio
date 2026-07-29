@@ -193,20 +193,14 @@ class FavoriteViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoadingSeasons.value = true
             try {
-                when (val result = favoriteRepository.getSeasonsSeries(mid)) {
+                when (val result = favoriteRepository.getCollectedSeasons(mid)) {
                     is Result.Success -> {
                         val response = result.data
                         if (response.code == 0 && response.data != null) {
-                            // seasons_series 返回 items_lists，其中 seasons_list 为合集、
-                            // series_list 为系列；B站空间二者同页展示，这里合并后统一呈现。
-                            val lists = response.data.items_lists
-                            val combined = lists.seasons_list
-                                .mapNotNull { it.meta }
-                                .filter { it.seasonIdLong != 0L } +
-                                lists.series_list
-                                    .mapNotNull { it.meta }
-                                    .filter { it.seriesIdLong != 0L }
-                            _seasons.value = combined
+                            // 仅保留追更视频合集(attr==0)，过滤订阅的他人收藏夹(attr=22)与已失效项。
+                            _seasons.value = response.data.list
+                                .filter { it.isSeason && !it.isInvalid && it.id != 0L }
+                                .map { it.toSeasonMeta() }
                         } else {
                             _toast.value = response.message
                         }
@@ -227,15 +221,15 @@ class FavoriteViewModel @Inject constructor(
      * 加载指定合集内的视频列表，结果写入 [videos]/[filteredVideos]，
      * 供 VideoListScreen 复用展示与播放。
      */
-    fun loadSeasonVideos(mid: Long, seasonId: Long) {
+    fun loadSeasonVideos(seasonId: Long) {
         viewModelScope.launch {
             _isLoadingVideos.value = true
             try {
-                when (val result = favoriteRepository.getSeasonArchives(mid, seasonId)) {
+                when (val result = favoriteRepository.getSeasonVideos(seasonId)) {
                     is Result.Success -> {
                         val response = result.data
                         if (response.code == 0 && response.data != null) {
-                            _videos.value = response.data.archives.map { it.toVideoItem() }
+                            _videos.value = (response.data.medias ?: emptyList()).map { it.toVideoItem() }
                             applySearchFilter()
                         } else {
                             _toast.value = response.message
@@ -254,57 +248,10 @@ class FavoriteViewModel @Inject constructor(
     }
 
     /**
-     * 加载指定系列内的视频列表，与合集区别在于请求接口不同（series/archives）。
-     */
-    fun loadSeriesVideos(mid: Long, seriesId: Long) {
-        viewModelScope.launch {
-            _isLoadingVideos.value = true
-            try {
-                when (val result = favoriteRepository.getSeriesArchives(mid, seriesId)) {
-                    is Result.Success -> {
-                        val response = result.data
-                        if (response.code == 0 && response.data != null) {
-                            _videos.value = response.data.archives.map { it.toVideoItem() }
-                            applySearchFilter()
-                        } else {
-                            _toast.value = response.message
-                        }
-                    }
-                    is Result.Error -> {
-                        _toast.value = "加载系列视频失败: ${result.message}"
-                    }
-                    Result.Loading -> {}
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            _isLoadingVideos.value = false
-        }
-    }
-
-    /**
-     * 自动获取当前用户 mid 后按类型加载合集/系列视频，供 UI 层无需关心 mid 时调用。
-     * @param isSeries true 走系列接口，false 走合集接口。
+     * 加载合集视频的便捷入口（新方案下无需 mid）。
      */
     fun loadSeasonOrSeriesVideosAuto(businessId: Long, isSeries: Boolean) {
-        viewModelScope.launch {
-            try {
-                val mid = authRepository.getCurrentUserId()
-                if (mid != null) {
-                    if (isSeries) {
-                        loadSeriesVideos(mid, businessId)
-                    } else {
-                        loadSeasonVideos(mid, businessId)
-                    }
-                } else {
-                    _toast.value = "未登录，无法加载合集"
-                    _isLoadingVideos.value = false
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _isLoadingVideos.value = false
-            }
-        }
+        loadSeasonVideos(businessId)
     }
 
     // ============ 播放历史 ============
