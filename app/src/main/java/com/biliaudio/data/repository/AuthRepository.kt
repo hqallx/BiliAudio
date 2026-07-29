@@ -93,7 +93,7 @@ class AuthRepository @Inject constructor(
     suspend fun getUserInfo(): NavResult = try {
         val resp = api.getNavInfo()
         // 同步提取并缓存 WBI 签名密钥（nav 接口始终返回 wbi_img，不依赖登录态）。
-        // 后续 playurl / seasons_series 等 WBI 接口需要用到。
+        // 后续 playurl 等 WBI 接口需要用到。
         resp.data?.wbi_img?.let { wbi ->
             wbiSigner.updateKeys(wbi.img_url, wbi.sub_url)
         }

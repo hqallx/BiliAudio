@@ -7,7 +7,7 @@ import javax.inject.Singleton
 /**
  * B站 WBI 签名工具。
  *
- * B站的 `x/player/wbi/playurl`、`x/polymer/web-space/...` 等「wbi」接口要求
+ * B站的 `x/player/wbi/playurl` 等「wbi」接口要求
  * 在请求参数中附加 `wts`（时间戳）和 `w_rid`（参数签名），否则返回 -403/-509。
  *
  * 签名密钥由 `x/web-interface/nav` 接口的 `data.wbi_img` 字段提供：

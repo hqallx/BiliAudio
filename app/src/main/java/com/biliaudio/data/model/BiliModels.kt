@@ -429,7 +429,8 @@ data class HistoryItem(
             bvid = detail.bvid,
             title = title,
             cover = cover,
-            duration = duration
+            duration = duration,
+            cid = detail.cid
         )
     }
 }
