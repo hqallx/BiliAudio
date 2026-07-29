@@ -1,5 +1,6 @@
 package com.biliaudio.data.model
 
+import com.biliaudio.data.toHttpsUrl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -30,14 +31,15 @@ data class NavInfo(
     val uname: String = "",
     val face: String = "",
     val sign: String = "",
-    val level_info: NavLevelInfo? = null
+    val level_info: NavLevelInfo? = null,
+    val wbi_img: WbiImg? = null
 ) {
     fun toUserInfo(): UserInfo? {
         if (!isLogin || mid == 0L) return null
         return UserInfo(
             mid = mid,
             name = uname,
-            face = face,
+            face = face.toHttpsUrl(),
             sign = sign,
             level = level_info?.currentLevel ?: 0
         )
@@ -48,6 +50,17 @@ data class NavInfo(
 data class NavLevelInfo(
     @SerialName("current_level")
     val currentLevel: Int = 0
+)
+
+/**
+ * nav 接口返回的 WBI 签名密钥信息。
+ * img_url 和 sub_url 的路径末段（去掉扩展名）分别为 img_key 与 sub_key，
+ * 二者拼接后经混淆表处理得到 mixin_key，用于对 WBI 接口请求参数签名。
+ */
+@Serializable
+data class WbiImg(
+    val img_url: String = "",
+    val sub_url: String = ""
 )
 
 @Serializable
@@ -259,11 +272,16 @@ data class SeasonListItem(
 /**
  * 合集/系列元数据。
  * 合集用 season_id，系列用 series_id；通过 [businessId] / [isSeries] 统一访问。
+ *
+ * 注意：B站接口对 season_id / series_id 的返回类型不统一——有时是数字、
+ * 有时是字符串。这里统一用 [String] 接收（isLenient 模式下数字会自动转字符串），
+ * 再在 [businessId] 中按需 toLong，避免类型不匹配导致反序列化失败、
+ * 合集被静默过滤掉（表现为「无法检测到合集」）。
  */
 @Serializable
 data class SeasonMeta(
-    val season_id: Long = 0,
-    val series_id: Long = 0,
+    val season_id: String = "",
+    val series_id: String = "",
     val mid: Long = 0,
     val name: String = "",
     val cover: String = "",
@@ -271,13 +289,21 @@ data class SeasonMeta(
     val total: Int = 0,
     val ptime: Long = 0
 ) {
+    /** season_id 转为 Long（无法解析或为 "0" 时返回 0）。 */
+    val seasonIdLong: Long
+        get() = season_id.toLongOrNull() ?: 0L
+
+    /** series_id 转为 Long（无法解析或为 "0" 时返回 0）。 */
+    val seriesIdLong: Long
+        get() = series_id.toLongOrNull() ?: 0L
+
     /** 统一业务 id：合集取 season_id，系列取 series_id。 */
     val businessId: Long
-        get() = if (season_id != 0L) season_id else series_id
+        get() = if (seasonIdLong != 0L) seasonIdLong else seriesIdLong
 
     /** 是否为系列（而非合集），决定视频列表走哪个接口。 */
     val isSeries: Boolean
-        get() = season_id == 0L && series_id != 0L
+        get() = seasonIdLong == 0L && seriesIdLong != 0L
 }
 
 @Serializable

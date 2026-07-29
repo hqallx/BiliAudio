@@ -8,6 +8,7 @@ import com.biliaudio.data.model.VideoItem
 import com.biliaudio.data.model.VideoStreamResponse
 import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.resultOf
+import com.biliaudio.data.toHttpsUrl
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -46,7 +47,7 @@ class VideoRepository @Inject constructor(
         return when (val result = getVideoStream(bvid = video.bvid, aid = video.aid)) {
             is Result.Success -> {
                 val audioItem = result.data.data?.dash?.audio?.firstOrNull()
-                val url = audioItem?.url
+                val url = audioItem?.url?.toHttpsUrl()
                 if (url.isNullOrEmpty()) {
                     Result.Error(IllegalStateException("No audio stream"), "未获取到音频流")
                 } else {
@@ -72,7 +73,7 @@ class VideoRepository @Inject constructor(
                     id = video.bvid.ifEmpty { video.aid.toString() },
                     title = video.title,
                     artist = video.upper?.name ?: "Unknown",
-                    coverUrl = video.cover,
+                    coverUrl = video.cover.toHttpsUrl(),
                     audioUrl = urlResult.data,
                     duration = video.duration.toLong() * 1000,
                     bvid = video.bvid,

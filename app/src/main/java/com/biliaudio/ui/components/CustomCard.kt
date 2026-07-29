@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun VideoCard(
@@ -59,13 +64,7 @@ fun VideoCard(
                     .size(56.dp)
                     .clip(RoundedCornerShape(8.dp))
             ) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                )
+                CoverThumbnail(coverUrl = coverUrl, modifier = Modifier.fillMaxSize())
                 Box(
                     modifier = Modifier
                         .size(56.dp)
@@ -114,6 +113,51 @@ fun VideoCard(
     }
 }
 
+/**
+ * 统一的封面缩略图组件。
+ *
+ * B站接口返回的封面 URL 多为 `http://` 明文，部分设备会因明文流量策略加载失败。
+ * 这里在请求前统一升级为 `https://`，并用 [surfaceVariant] 做占位背景、
+ * [Folder] 图标做加载失败兜底，避免「收藏夹没有封面」的视觉空洞。
+ */
+@Composable
+private fun CoverThumbnail(
+    coverUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val normalized = coverUrl.toHttpsUrl()
+    Box(
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (normalized.isNotEmpty()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(normalized)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxSize(0.5f)
+            )
+        }
+    }
+}
+
+/**
+ * B站 URL 统一升级为 HTTPS（局部工具，避免在 UI 层引入 data 包依赖）。
+ */
+private fun String.toHttpsUrl(): String =
+    if (startsWith("http://")) "https://" + substring(7) else this
+
 @Composable
 fun FolderCard(
     title: String,
@@ -137,21 +181,17 @@ fun FolderCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            if (coverUrl.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1.5f)
-                        .clip(RoundedCornerShape(12.dp))
-                ) {
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+            // 始终保留封面区域，即使 URL 为空也显示占位图标，
+            // 保证卡片高度一致，避免「没有封面」的空洞感。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.5f)
+                    .clip(RoundedCornerShape(12.dp))
+            ) {
+                CoverThumbnail(coverUrl = coverUrl, modifier = Modifier.fillMaxSize())
             }
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,

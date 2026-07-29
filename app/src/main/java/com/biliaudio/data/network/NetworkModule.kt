@@ -17,6 +17,9 @@ object NetworkModule {
     private var cookieJar: BiliCookieJar? = null
 
     @Volatile
+    private var wbiSigner: WbiSigner? = null
+
+    @Volatile
     private var api: BiliApi? = null
 
     @Volatile
@@ -30,11 +33,23 @@ object NetworkModule {
                 }
             }
         }
+        if (wbiSigner == null) {
+            synchronized(this) {
+                if (wbiSigner == null) {
+                    wbiSigner = WbiSigner()
+                }
+            }
+        }
     }
 
     fun provideCookieJar(): BiliCookieJar {
         checkNotNull(cookieJar) { "NetworkModule.init() must be called first" }
         return cookieJar!!
+    }
+
+    fun provideWbiSigner(): WbiSigner {
+        checkNotNull(wbiSigner) { "NetworkModule.init() must be called first" }
+        return wbiSigner!!
     }
 
     fun provideOkHttpClient(): OkHttpClient {
@@ -55,6 +70,7 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .cookieJar(provideCookieJar())
             .addInterceptor(headerInterceptor)
+            .addInterceptor(WbiSignInterceptor(provideWbiSigner()))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

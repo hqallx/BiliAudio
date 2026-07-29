@@ -202,10 +202,10 @@ class FavoriteViewModel @Inject constructor(
                             val lists = response.data.items_lists
                             val combined = lists.seasons_list
                                 .mapNotNull { it.meta }
-                                .filter { it.season_id != 0L } +
+                                .filter { it.seasonIdLong != 0L } +
                                 lists.series_list
                                     .mapNotNull { it.meta }
-                                    .filter { it.series_id != 0L }
+                                    .filter { it.seriesIdLong != 0L }
                             _seasons.value = combined
                         } else {
                             _toast.value = response.message

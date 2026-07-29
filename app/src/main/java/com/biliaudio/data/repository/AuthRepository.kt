@@ -13,6 +13,7 @@ import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.network.BiliCookieJar
 import com.biliaudio.data.network.BiliPassportApi
 import com.biliaudio.data.network.CookieHelper
+import com.biliaudio.data.network.WbiSigner
 import com.biliaudio.data.resultOf
 import com.biliaudio.ui.components.GeeTestResult
 import okhttp3.Cookie
@@ -23,7 +24,8 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val api: BiliApi,
     private val passportApi: BiliPassportApi,
-    private val cookieJar: BiliCookieJar
+    private val cookieJar: BiliCookieJar,
+    private val wbiSigner: WbiSigner
 ) {
 
     var onCookiesUpdated: ((List<Cookie>) -> Unit)?
@@ -90,6 +92,11 @@ class AuthRepository @Inject constructor(
      */
     suspend fun getUserInfo(): NavResult = try {
         val resp = api.getNavInfo()
+        // 同步提取并缓存 WBI 签名密钥（nav 接口始终返回 wbi_img，不依赖登录态）。
+        // 后续 playurl / seasons_series 等 WBI 接口需要用到。
+        resp.data?.wbi_img?.let { wbi ->
+            wbiSigner.updateKeys(wbi.img_url, wbi.sub_url)
+        }
         when {
             // code=0 且 isLogin=true：正常已登录
             resp.code == 0 && resp.data != null && resp.data.isLogin -> {
@@ -98,9 +105,10 @@ class AuthRepository @Inject constructor(
             }
             // code=-101：账号未登录（Cookie 失效）
             // isLogin=false：服务端明确告知未登录
-            resp.code == -101 || resp.data?.isLogin == false -> NavResult.NotLoggedIn
-            // 其他 code：保守视为未登录（但不主动 logout，交给上层判断）
-            else -> NavResult.NotLoggedIn
+            resp.code == -101 || (resp.code == 0 && resp.data?.isLogin == false) -> NavResult.NotLoggedIn
+            // 其他 code（如 -352 风控、-509 限流、-403 等）：
+            // Cookie 可能仍有效，不应据此登出，交给上层按 Failed 处理（保留登录态）。
+            else -> NavResult.Failed("nav 接口返回 code=${resp.code}: ${resp.message}")
         }
     } catch (e: Exception) {
         NavResult.Failed(e.message ?: "获取用户信息失败")

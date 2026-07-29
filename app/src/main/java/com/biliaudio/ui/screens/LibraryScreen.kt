@@ -34,6 +34,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +86,14 @@ fun LibraryScreen(
 
     var selectedTab by remember { mutableStateOf(LibraryTab.Favorites) }
     val coroutineScope = rememberCoroutineScope()
+
+    // 首次使用或登录成功后，FavoriteViewModel.init 可能因登录态尚未就绪而拿不到 mid，
+    // 导致收藏夹/合集为空、需用户手动刷新。这里监听登录状态变化，登录后自动加载。
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            favoriteViewModel.refresh()
+        }
+    }
 
     Scaffold(
         topBar = {
