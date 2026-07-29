@@ -216,6 +216,9 @@ fun AppRoot(
                         authViewModel = authViewModel,
                         onFolderClick = { folderId, folderName ->
                             navController.navigate("videos/$folderId/$folderName")
+                        },
+                        onLoginClick = {
+                            navController.navigate("login")
                         }
                     )
                 }

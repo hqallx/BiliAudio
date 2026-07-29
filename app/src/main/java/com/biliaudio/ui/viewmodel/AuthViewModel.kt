@@ -62,10 +62,11 @@ class AuthViewModel @Inject constructor(
     private var captcha: CaptchaResponse? = null
     private var geeTestResult: GeeTestResult? = null
     private var smsCaptchaKey: String? = null
-    // bilibili 国际代码 ID：1=中国大陆（不是区号86）
+    // bilibili SMS 接口的 cid 参数：直接传区号（中国大陆=86）。
+    // 参考 BBPlayer: const COUNTRY_CODE = '86'
     // @Volatile：主线程写、协程读，保证可见性
     @Volatile
-    private var pendingCid: String = "1"
+    private var pendingCid: String = "86"
     @Volatile
     private var pendingTel: String = ""
     private var countdownJob: Job? = null

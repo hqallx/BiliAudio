@@ -16,9 +16,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,7 +47,8 @@ import com.biliaudio.ui.viewmodel.FavoriteViewModel
 fun FavoriteScreen(
     favoriteViewModel: FavoriteViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel(),
-    onFolderClick: (Long, String) -> Unit = { _, _ -> }
+    onFolderClick: (Long, String) -> Unit = { _, _ -> },
+    onLoginClick: () -> Unit = {}
 ) {
     val folders by favoriteViewModel.folders.collectAsState()
     val isLoading by favoriteViewModel.isLoadingFolders.collectAsState()
@@ -105,7 +108,7 @@ fun FavoriteScreen(
                 androidx.compose.material3.CircularProgressIndicator()
             }
         } else if (!isLoggedIn) {
-            // 跳过登录的用户：提示需要登录才能访问收藏夹
+            // 跳过登录的用户：提示需要登录才能访问收藏夹，并提供「去登录」入口
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -124,7 +127,7 @@ fun FavoriteScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "未登录",
+                        text = "登录后查看收藏夹",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -134,6 +137,14 @@ fun FavoriteScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = onLoginClick,
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(text = "去登录", style = MaterialTheme.typography.titleSmall)
+                    }
                 }
             }
         } else if (folders.isEmpty()) {

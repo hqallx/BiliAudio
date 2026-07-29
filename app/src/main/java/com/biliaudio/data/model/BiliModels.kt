@@ -185,7 +185,9 @@ data class QrCodeStatusData(
  */
 @Serializable
 data class CaptchaResponse(
-    @SerialName("recaptcha_token")
+    // bilibili captcha 接口返回字段名为 "token"（不是 recaptcha_token）。
+    // 参考BBPlayer BilibiliCaptchaTokenData: { token, geetest: { gt, challenge } }
+    @SerialName("token")
     val recaptchaToken: String = "",
     val type: String = "",
     @SerialName("geetest_gt")

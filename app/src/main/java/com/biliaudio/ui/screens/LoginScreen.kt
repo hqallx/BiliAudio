@@ -75,22 +75,23 @@ private enum class LoginTab(val label: String) {
 
 /**
  * 常用国家/地区。
- * @param cid bilibili 国际代码 ID（SMS 接口的 cid 参数，如中国大陆=1）
- * @param areaCode 区号（仅用于显示，如 +86）
+ *
+ * @param cid bilibili SMS 接口的 cid 参数，直接传区号（如中国大陆=86）。
+ *             参考 BBPlayer: const COUNTRY_CODE = '86'
+ * @param areaCode 区号数字（仅用于显示，如 86）
  * @param label 显示文本
  */
 private data class CountryCode(val cid: String, val areaCode: String, val label: String)
 private val COUNTRY_CODES = listOf(
-    CountryCode("1", "86", "+86 中国大陆"),
-    CountryCode("5", "852", "+852 中国香港"),
-    CountryCode("3", "853", "+853 中国澳门"),
-    CountryCode("2", "886", "+886 中国台湾"),
-    CountryCode("7", "1", "+1 美国/加拿大"),
-    CountryCode("9", "81", "+81 日本"),
-    CountryCode("10", "82", "+82 韩国"),
-    CountryCode("11", "65", "+65 新加坡"),
-    CountryCode("12", "60", "+60 马来西亚"),
-    CountryCode("7", "1", "+1 其他")
+    CountryCode("86", "86", "+86 中国大陆"),
+    CountryCode("852", "852", "+852 中国香港"),
+    CountryCode("853", "853", "+853 中国澳门"),
+    CountryCode("886", "886", "+886 中国台湾"),
+    CountryCode("1", "1", "+1 美国/加拿大"),
+    CountryCode("81", "81", "+81 日本"),
+    CountryCode("82", "82", "+82 韩国"),
+    CountryCode("65", "65", "+65 新加坡"),
+    CountryCode("60", "60", "+60 马来西亚")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
