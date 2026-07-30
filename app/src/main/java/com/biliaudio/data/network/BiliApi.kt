@@ -44,13 +44,22 @@ interface BiliApi {
         @Query("aid") aid: Long = 0
     ): BiliResponse<VideoInfoResponse>
 
+    /**
+     * 获取视频播放地址（含 DASH 音频流）。
+     *
+     * 参考 BBPlayer：使用 fnval=4048 请求完整的 DASH 清单，
+     * 其中包含普通音频流、杜比全景声(dolby)与 Hi-Res 无损(flac)。
+     * 据此在客户端按优先级选择最优音频流，平衡音质与加载速度。
+     *
+     * 不再传 qn（视频清晰度）参数：纯音频播放无需视频流，
+     * 省略 qn 可减少不必要的视频流清单，降低响应体积、加快解析。
+     */
     @GET("x/player/wbi/playurl")
     suspend fun getVideoStream(
         @Query("bvid") bvid: String = "",
         @Query("aid") aid: Long = 0,
         @Query("cid") cid: Long = 0,
-        @Query("qn") qn: Int = 64,
-        @Query("fnval") fnval: Int = 16,
+        @Query("fnval") fnval: Int = 4048,
         @Query("fnver") fnver: Int = 0,
         @Query("fourk") fourk: Int = 1
     ): BiliResponse<VideoStreamResponse>

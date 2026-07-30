@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -43,9 +44,31 @@ class PlaybackManager @Inject constructor(
     private val _repeatMode = MutableStateFlow(RepeatMode.NONE)
     val repeatMode: StateFlow<RepeatMode> = _repeatMode
 
+    /** 是否正在缓冲/加载（含懒解析音频地址阶段）。 */
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
+    /** 最近一次播放错误，null 表示无错误。供 UI 展示重试入口。 */
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             _isPlaying.value = playing
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // STATE_BUFFERING 时认为正在加载（含懒解析阶段）；
+            // 进入 READY/ENDED 时清除加载态与错误态。
+            _isLoading.value = playbackState == Player.STATE_BUFFERING
+            if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
+                _playbackError.value = null
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            _playbackError.value = friendlyErrorMessage(error)
+            _isLoading.value = false
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -55,6 +78,8 @@ class PlaybackManager @Inject constructor(
             if (index >= 0 && index < _playlist.value.size) {
                 _currentTrack.value = _playlist.value[index]
             }
+            // 切换曲目时清除上一首的错误态
+            _playbackError.value = null
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
@@ -64,6 +89,16 @@ class PlaybackManager @Inject constructor(
                 _currentPosition.value = player.currentPosition
                 _duration.value = player.duration.coerceAtLeast(0L)
             }
+        }
+    }
+
+    private fun friendlyErrorMessage(error: PlaybackException): String {
+        // 懒解析失败（IOException）映射为更友好的提示
+        val cause = error.cause
+        return when {
+            error.message?.contains("解析音频地址") == true -> "音频地址解析失败，请重试"
+            cause is java.io.IOException -> "网络加载失败，请检查网络后重试"
+            else -> "播放失败，请重试"
         }
     }
 
@@ -115,23 +150,20 @@ class PlaybackManager @Inject constructor(
         mediaController?.seekToPreviousMediaItem()
     }
 
+    /**
+     * 设置播放列表。
+     *
+     * Track.audioUrl 既可以是懒解析占位 URI（biliaudio://resolve?...），
+     * 也可以是真实地址——ExoPlayer 配合 PlaybackService 的 ResolvingDataSource
+     * 会自动处理，此处无需区分。这使得「播放全部」长列表瞬时完成。
+     */
     fun setPlaylist(tracks: List<Track>, startIndex: Int = 0) {
         _playlist.value = tracks
         _currentIndex.value = startIndex
         _currentTrack.value = tracks.getOrNull(startIndex)
+        _playbackError.value = null
 
-        val mediaItems = tracks.map { track ->
-            MediaItem.Builder()
-                .setUri(Uri.parse(track.audioUrl))
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artist)
-                        .setArtworkUri(Uri.parse(track.coverUrl))
-                        .build()
-                )
-                .build()
-        }
+        val mediaItems = tracks.map { it.toMediaItem() }
 
         mediaController?.setMediaItems(mediaItems, startIndex, 0L)
         mediaController?.prepare()
@@ -143,18 +175,7 @@ class PlaybackManager @Inject constructor(
         currentList.add(track)
         _playlist.value = currentList
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(track.audioUrl))
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artist)
-                    .setArtworkUri(Uri.parse(track.coverUrl))
-                    .build()
-            )
-            .build()
-
-        mediaController?.addMediaItem(mediaItem)
+        mediaController?.addMediaItem(track.toMediaItem())
     }
 
     fun removeFromPlaylist(index: Int) {
@@ -168,6 +189,7 @@ class PlaybackManager @Inject constructor(
 
     fun playAt(index: Int) {
         if (index in _playlist.value.indices) {
+            _playbackError.value = null
             mediaController?.seekToDefaultPosition(index)
             mediaController?.play()
         }
@@ -195,6 +217,17 @@ class PlaybackManager @Inject constructor(
     }
 
     /**
+     * 重新准备当前曲目（错误后重试）。
+     * ExoPlayer 重新解析占位 URI 并加载，触发懒解析流程。
+     */
+    fun retry() {
+        _playbackError.value = null
+        val controller = mediaController ?: return
+        controller.prepare()
+        controller.play()
+    }
+
+    /**
      * 返回当前播放状态快照，用于持久化。
      */
     fun snapshotPlaybackState(): PlaybackSnapshot {
@@ -204,6 +237,19 @@ class PlaybackManager @Inject constructor(
             position = _currentPosition.value
         )
     }
+
+    private fun Track.toMediaItem(): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(id)
+            .setUri(Uri.parse(audioUrl))
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .setArtworkUri(Uri.parse(coverUrl))
+                    .build()
+            )
+            .build()
 }
 
 data class PlaybackSnapshot(

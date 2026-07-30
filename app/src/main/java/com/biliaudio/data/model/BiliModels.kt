@@ -115,7 +115,20 @@ data class FavoriteResourceResponse(
 data class VideoStreamResponse(
     @SerialName("accept_quality")
     val acceptQuality: List<Int> = emptyList(),
-    val dash: DashData? = null
+    val dash: DashData? = null,
+    val durl: List<DurlItem>? = null
+)
+
+/**
+ * 旧的 FLV/MP4 流式地址（fnval 未返回 dash 时使用）。
+ * B站对部分老视频或不支持 DASH 的内容会返回 durl，取首段作为音频源兜底。
+ */
+@Serializable
+data class DurlItem(
+    val order: Int = 0,
+    val url: String = "",
+    @SerialName("backup_url")
+    val backupUrl: List<String> = emptyList()
 )
 
 /**
@@ -136,7 +149,29 @@ data class VideoInfoResponse(
 @Serializable
 data class DashData(
     val duration: Int = 0,
+    val audio: List<AudioItem> = emptyList(),
+    val dolby: DolbyData? = null,
+    val flac: FlacData? = null
+)
+
+/**
+ * 杜比全景声数据。
+ * 参考 BBPlayer：dash.dolby.audio 为杜比音频流，优先级最高。
+ */
+@Serializable
+data class DolbyData(
+    val type: Int = 0,
     val audio: List<AudioItem> = emptyList()
+)
+
+/**
+ * Hi-Res 无损音频数据。
+ * 参考 BBPlayer：dash.flac.audio 为 Hi-Res 无损音频流，优先级仅次于杜比。
+ */
+@Serializable
+data class FlacData(
+    val display: Boolean = false,
+    val audio: AudioItem? = null
 )
 
 @Serializable

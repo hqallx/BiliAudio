@@ -93,6 +93,8 @@ fun AppRoot(
     val currentPosition by playerViewModel.currentPosition.collectAsStateWithLifecycle()
     val duration by playerViewModel.duration.collectAsStateWithLifecycle()
     val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
+    val isPlayerLoading by playerViewModel.isLoading.collectAsStateWithLifecycle()
+    val playerError by playerViewModel.playbackError.collectAsStateWithLifecycle()
 
     val toast by authViewModel.toast.collectAsStateWithLifecycle()
     val favToast by favoriteViewModel.toast.collectAsStateWithLifecycle()
@@ -281,11 +283,14 @@ fun AppRoot(
             currentPosition = currentPosition,
             duration = duration,
             repeatMode = repeatMode,
+            isLoading = isPlayerLoading,
+            playbackError = playerError,
             onPlayPause = { playerViewModel.togglePlayPause() },
             onSeek = { position -> playerViewModel.seekTo(position) },
             onNext = { playerViewModel.next() },
             onPrevious = { playerViewModel.previous() },
             onToggleRepeat = { playerViewModel.toggleRepeatMode() },
+            onRetry = { playerViewModel.retry() },
             onDismiss = { showPlayer = false }
         )
     }

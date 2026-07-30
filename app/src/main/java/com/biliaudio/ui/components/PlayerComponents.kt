@@ -132,11 +132,14 @@ fun PlayerScreen(
     currentPosition: Long,
     duration: Long,
     repeatMode: RepeatMode,
+    isLoading: Boolean,
+    playbackError: String?,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onToggleRepeat: () -> Unit,
+    onRetry: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -186,14 +189,69 @@ fun PlayerScreen(
                 .padding(top = 8.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                AsyncImage(
-                    model = track?.coverUrl,
-                    contentDescription = null,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(320.dp)
                         .clip(RoundedCornerShape(28.dp))
-                )
+                ) {
+                    AsyncImage(
+                        model = track?.coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // 加载态：懒解析音频地址 / 网络缓冲时显示。
+                    // 半透明遮罩 + 进度指示，避免长时间无反馈。
+                    if (isLoading && playbackError == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0x66000000)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "正在加载...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                    // 错误态：展示错误信息与重试按钮。
+                    if (playbackError != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0x88000000)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = playbackError,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                androidx.compose.material3.Button(
+                                    onClick = onRetry,
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = PlayerBlue
+                                    )
+                                ) {
+                                    Text(text = "重试", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier

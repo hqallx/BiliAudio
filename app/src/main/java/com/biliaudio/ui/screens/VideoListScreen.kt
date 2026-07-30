@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,7 +32,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +41,6 @@ import com.biliaudio.ui.components.VideoCard
 import com.biliaudio.ui.components.formatDurationMinSec
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
-import kotlinx.coroutines.launch
 
 /** 视频列表的数据来源，区分收藏夹与合集/系列。 */
 enum class VideoListSource { FAVORITE, SEASON }
@@ -61,8 +58,6 @@ fun VideoListScreen(
 ) {
     val videos by favoriteViewModel.filteredVideos.collectAsState()
     val isLoading by favoriteViewModel.isLoadingVideos.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    var isLoadingAudio by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
 
@@ -107,13 +102,11 @@ fun VideoListScreen(
             if (videos.isNotEmpty()) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        coroutineScope.launch {
-                            isLoadingAudio = true
-                            val tracks = favoriteViewModel.videosToTracks(videos)
-                            if (tracks.isNotEmpty()) {
-                                playerViewModel.setPlaylist(tracks)
-                            }
-                            isLoadingAudio = false
+                        // 懒解析：瞬时创建播放列表，音频地址在播放时按需解析。
+                        // 不再阻塞等待所有视频的 playurl，长列表「播放全部」秒响应。
+                        val tracks = favoriteViewModel.videosToLazyTracks(videos)
+                        if (tracks.isNotEmpty()) {
+                            playerViewModel.setPlaylist(tracks)
                         }
                     },
                     icon = {
@@ -178,39 +171,17 @@ fun VideoListScreen(
                             coverUrl = video.cover,
                             duration = formatDurationMinSec(video.duration),
                             onClick = {
-                                coroutineScope.launch {
-                                    val track = favoriteViewModel.videoToTrack(video)
-                                    if (track != null) {
-                                        val currentPlaylist = playerViewModel.playlist.value
-                                        val index = currentPlaylist.indexOfFirst { it.id == track.id }
-                                        if (index >= 0) {
-                                            playerViewModel.playAt(index)
-                                        } else {
-                                            playerViewModel.addToPlaylist(track)
-                                            playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
-                                        }
-                                    }
+                                // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                                val track = favoriteViewModel.videoToLazyTrack(video)
+                                val currentPlaylist = playerViewModel.playlist.value
+                                val index = currentPlaylist.indexOfFirst { it.id == track.id }
+                                if (index >= 0) {
+                                    playerViewModel.playAt(index)
+                                } else {
+                                    playerViewModel.addToPlaylist(track)
+                                    playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
                                 }
                             }
-                        )
-                    }
-                }
-            }
-
-            if (isLoadingAudio) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "正在获取音频地址...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -251,13 +222,10 @@ fun VideoListScreen(
                     coverUrl = video.cover,
                     duration = formatDurationMinSec(video.duration),
                     onClick = {
-                        coroutineScope.launch {
-                            val track = favoriteViewModel.videoToTrack(video)
-                            if (track != null) {
-                                playerViewModel.addToPlaylist(track)
-                                playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
-                            }
-                        }
+                        // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                        val track = favoriteViewModel.videoToLazyTrack(video)
+                        playerViewModel.addToPlaylist(track)
+                        playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
                     }
                 )
             }

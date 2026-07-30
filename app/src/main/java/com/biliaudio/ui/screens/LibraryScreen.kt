@@ -39,7 +39,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +53,6 @@ import com.biliaudio.ui.components.formatDurationMinSec
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -85,7 +83,6 @@ fun LibraryScreen(
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
 
     var selectedTab by remember { mutableStateOf(LibraryTab.Favorites) }
-    val coroutineScope = rememberCoroutineScope()
 
     // 首次使用或登录成功后，FavoriteViewModel.init 可能因登录态尚未就绪而拿不到 mid，
     // 导致收藏夹/合集为空、需用户手动刷新。这里监听登录状态变化，登录后自动加载。
@@ -202,12 +199,11 @@ fun LibraryScreen(
                     history = history,
                     isLoading = isLoadingHistory,
                     onPlay = { item ->
-                        coroutineScope.launch {
-                            val track = favoriteViewModel.historyItemToTrack(item)
-                            if (track != null) {
-                                playerViewModel.addToPlaylist(track)
-                                playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
-                            }
+                        // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                        val track = favoriteViewModel.historyItemToLazyTrack(item)
+                        if (track != null) {
+                            playerViewModel.addToPlaylist(track)
+                            playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
                         }
                     }
                 )

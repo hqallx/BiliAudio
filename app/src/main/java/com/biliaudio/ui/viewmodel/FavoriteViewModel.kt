@@ -174,6 +174,32 @@ class FavoriteViewModel @Inject constructor(
         }
     }
 
+    // ============ 懒解析（参考 BBPlayer 占位 URI 方案） ============
+    // 以下方法创建的 Track.audioUrl 为占位 URI，不发起任何网络请求，
+    // 真实音频地址在 ExoPlayer 加载时由 PlaybackService 的 ResolvingDataSource 解析。
+    // 这使「播放全部」「单击播放」瞬时响应，长列表不再卡顿。
+
+    /**
+     * 创建懒解析 Track（瞬时，无网络请求）。
+     */
+    fun videoToLazyTrack(video: VideoItem): com.biliaudio.data.model.Track =
+        videoRepository.videoToLazyTrack(video)
+
+    /**
+     * 批量创建懒解析 Track（瞬时，无网络请求）。
+     * 「播放全部」长列表的关键：创建播放列表不再串行预请求 playurl。
+     */
+    fun videosToLazyTracks(videos: List<VideoItem>): List<com.biliaudio.data.model.Track> =
+        videoRepository.videosToLazyTracks(videos)
+
+    /**
+     * 历史记录项转懒解析 Track。
+     */
+    fun historyItemToLazyTrack(item: HistoryItem): com.biliaudio.data.model.Track? {
+        val video = item.toVideoItem() ?: return null
+        return videoToLazyTrack(video)
+    }
+
     fun refresh() {
         try {
             val mid = authRepository.getCurrentUserId()

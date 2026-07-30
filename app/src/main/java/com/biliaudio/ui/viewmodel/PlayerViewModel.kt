@@ -27,6 +27,8 @@ class PlayerViewModel @Inject constructor(
     val playlist: StateFlow<List<Track>> = playbackManager.playlist
     val currentIndex: StateFlow<Int> = playbackManager.currentIndex
     val repeatMode: StateFlow<RepeatMode> = playbackManager.repeatMode
+    val isLoading: StateFlow<Boolean> = playbackManager.isLoading
+    val playbackError: StateFlow<String?> = playbackManager.playbackError
 
     private var progressJob: Job? = null
 
@@ -56,6 +58,7 @@ class PlayerViewModel @Inject constructor(
     fun addToPlaylist(track: Track) = playbackManager.addToPlaylist(track)
     fun playAt(index: Int) = playbackManager.playAt(index)
     fun toggleRepeatMode() = playbackManager.toggleRepeatMode()
+    fun retry() = playbackManager.retry()
 
     override fun onCleared() {
         super.onCleared()
