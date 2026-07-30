@@ -447,25 +447,16 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                     is NavResult.NotLoggedIn -> {
-                        DebugLogger.w("AuthVM", "nav 返回 NotLoggedIn，开始重试")
-                        // 接口明确返回未登录（code=-101 或 isLogin=false）。
-                        // 划掉后台/冷启动恢复时 nav 接口可能瞬时返回 -101
-                        // （Cookie 时序、服务端缓存、网络抖动等），若直接 logout
-                        // 会清掉仍有效的 Cookie，导致用户被误踢出登录。
-                        // 改为：递增延迟重试 3 次；仍失败则保留 Cookie 与登录态，
-                        // 仅提示用户。Cookie 真失效时用户操作会收到 -101，
-                        // 可由用户主动「退出登录」清理。
+                        DebugLogger.w("AuthVM", "nav 返回 NotLoggedIn(-101)，重试 1 次确认")
+                        // 参考 BBPlayer：接口明确返回 -101 视为 Cookie 失效。
+                        // 但 -101 可能瞬时（服务端缓存/网络抖动），重试 1 次确认：
+                        // 仍 -101 则清 Cookie 并退出登录；成功则继续。
                         if (_isLoggedIn.value) {
-                            var retryResult: NavResult = NavResult.NotLoggedIn
-                            for (attempt in 1..3) {
-                                delay(1500L * attempt)
-                                retryResult = authRepository.getUserInfo()
-                                DebugLogger.d("AuthVM", "nav 第${attempt}次重试: $retryResult")
-                                if (retryResult is NavResult.LoggedIn) break
-                            }
+                            delay(1500L)
+                            val retryResult = authRepository.getUserInfo()
+                            DebugLogger.d("AuthVM", "nav 重试结果: $retryResult")
                             when (retryResult) {
                                 is NavResult.LoggedIn -> {
-                                    DebugLogger.d("AuthVM", "重试后成功")
                                     _userInfo.value = retryResult.userInfo
                                     preferencesManager.saveUserInfo(
                                         id = retryResult.userInfo.mid.toString(),
@@ -474,14 +465,16 @@ class AuthViewModel @Inject constructor(
                                     )
                                 }
                                 is NavResult.NotLoggedIn -> {
-                                    // 不 logout 不清 Cookie：保留登录态，提示用户网络可能异常。
-                                    DebugLogger.w("AuthVM", "3 次重试仍 NotLoggedIn，保留登录态")
-                                    _toast.value = "登录状态校验失败，请检查网络后稍后重试"
-                                    if (_userInfo.value == null) {
-                                        restoreBasicUserInfo()
-                                    }
+                                    // 确认 Cookie 真正失效：清 Cookie，置未登录。
+                                    // AppRoot 的 LaunchedEffect 会据此跳转到登录页。
+                                    DebugLogger.w("AuthVM", "重试仍 -101，Cookie 失效，执行登出")
+                                    _toast.value = "登录已失效，请重新登录"
+                                    authRepository.clearCookies()
+                                    _isLoggedIn.value = false
+                                    _userInfo.value = null
                                 }
                                 is NavResult.Failed -> {
+                                    // 重试遇到网络错误：Cookie 可能仍有效，不清除。
                                     if (_userInfo.value == null) {
                                         restoreBasicUserInfo()
                                     }

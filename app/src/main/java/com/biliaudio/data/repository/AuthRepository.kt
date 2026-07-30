@@ -132,8 +132,15 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    /**
+     * 判断是否已登录。
+     *
+     * 参考 BBPlayer：登录态**仅由磁盘 Cookie 决定**，不做网络验证。
+     * 直接读 SharedPreferences（同步），不依赖内存 cookieStore，
+     * 消除进程重启后内存未恢复的时序问题。
+     */
     fun isLoggedIn(): Boolean {
-        return CookieHelper.hasLoginCookies(cookieJar.getAllCookies())
+        return cookieJar.hasLoginCookiesFromDisk()
     }
 
     fun getCurrentUserId(): Long? {

@@ -179,6 +179,18 @@ fun AppRoot(
     val isOnLogin = currentDestination?.route == "login"
     val showMiniPlayer = currentTrack != null && !isOnLogin
 
+    // 仅在未登录时显示登录页（参考 BBPlayer）。
+    // - startDestination 由 isLoggedIn 决定（同步磁盘 Cookie 检查）。
+    // - 登录成功由 onLoginSuccess 回调跳转 library。
+    // - 登录失效（nav -101 清 Cookie 后 isLoggedIn→false）→ 自动跳转登录页。
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn && !isOnLogin) {
+            navController.navigate("login") {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
