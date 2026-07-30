@@ -142,11 +142,15 @@ fun AppRoot(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    // 底部导航栏在非登录页（收藏/播放列表/我的）时显示，登录页不显示。
-    // 跳过登录的用户仍可浏览，通过「我的」页面的「去登录」按钮回到登录页。
+    // 底部导航栏仅在主 Tab（库/播放列表/我的）层级显示，二级界面与登录页不显示。
     val showBottomBar = currentDestination?.hierarchy?.any { destination ->
         items.any { it.route == destination.route }
     } == true
+    // 微缩播放器与底部导航栏解耦：只要有当前曲目且不在登录页就显示，
+    // 这样进入二级界面（收藏夹/合集视频列表）时底部仍保留微缩播放器，
+    // 用户可随时查看/控制播放、点击展开全屏播放器。
+    val isOnLogin = currentDestination?.route == "login"
+    val showMiniPlayer = currentTrack != null && !isOnLogin
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -154,7 +158,7 @@ fun AppRoot(
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (currentTrack != null && showBottomBar) {
+                if (showMiniPlayer) {
                     MiniPlayer(
                         track = currentTrack,
                         isPlaying = isPlaying,
