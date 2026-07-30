@@ -115,7 +115,7 @@ fun VideoCard(
             if (onAddNext != null) {
                 androidx.compose.material3.IconButton(onClick = onAddNext) {
                     Icon(
-                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.PlaylistAdd,
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.PlaylistPlay,
                         contentDescription = "下一首播放",
                         tint = MaterialTheme.colorScheme.primary
                     )

@@ -136,7 +136,7 @@ class PlaybackManager @Inject constructor(
                 mediaController?.addListener(playerListener)
                 // 连接后同步随机/循环模式到 Player，避免重建 controller 后状态丢失
                 mediaController?.shuffleModeEnabled = _isShuffle.value
-                mediaController?.playbackSpeed = _playbackSpeed.value
+                mediaController?.setPlaybackSpeed(_playbackSpeed.value)
                 mediaController?.repeatMode = when (_repeatMode.value) {
                     RepeatMode.NONE -> androidx.media3.common.Player.REPEAT_MODE_OFF
                     RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
@@ -286,7 +286,7 @@ class PlaybackManager @Inject constructor(
     fun setPlaybackSpeed(speed: Float) {
         val safeSpeed = speed.coerceIn(0.25f, 3.0f)
         _playbackSpeed.value = safeSpeed
-        mediaController?.playbackSpeed = safeSpeed
+        mediaController?.setPlaybackSpeed(safeSpeed)
     }
 
     // ============ 睡眠定时器 ============
