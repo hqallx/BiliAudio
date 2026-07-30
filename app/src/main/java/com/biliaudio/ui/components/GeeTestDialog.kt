@@ -155,7 +155,10 @@ fun GeeTestDialog(
                                 )
                             }
                         },
-                        update = { /* no-op */ }
+                        update = { /* no-op */ },
+                        // 弹窗关闭时主动销毁 WebView，释放 JS 引擎与内存，
+                        // 否则 WebView 会随 AlertDialog 回收但内部资源泄漏。
+                        onRelease = { web -> web.destroy() }
                     )
                 }
             }

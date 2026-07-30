@@ -1,9 +1,15 @@
 package com.biliaudio
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -123,6 +129,25 @@ fun AppRoot(
                 snackbarHostState.showSnackbar("网络不可用")
             }
         }
+    }
+
+    // Android 13+ 运行时请求通知权限，否则前台播放服务通知无法显示
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* 用户授予与否都不阻断，仅在未授予时无通知 */ }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // 全屏播放器打开时拦截返回键：先收起播放器，而不是直接导航退页
+    BackHandler(enabled = showPlayer) {
+        showPlayer = false
     }
 
     // 显示 Toast

@@ -516,6 +516,8 @@ class AuthViewModel @Inject constructor(
         pollJob?.cancel()
         countdownJob?.cancel()
         userJob?.cancel()
+        // 释放 Singleton 持有的回调引用，避免 ViewModel 销毁后仍被回调持有导致泄漏
+        authRepository.onCookiesUpdated = null
     }
 }
 
