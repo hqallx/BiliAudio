@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ExitToApp
@@ -291,7 +291,7 @@ private fun SettingsItemRow(
             modifier = Modifier.weight(1f)
         )
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.ChevronRight,
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFFBFBFBF),
             modifier = Modifier.size(20.dp)
@@ -344,7 +344,7 @@ private fun AccountRow(
             modifier = Modifier.weight(1f)
         )
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.ChevronRight,
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFFBFBFBF),
             modifier = Modifier.size(20.dp)
