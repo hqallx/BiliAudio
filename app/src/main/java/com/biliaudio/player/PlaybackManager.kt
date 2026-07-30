@@ -44,6 +44,10 @@ class PlaybackManager @Inject constructor(
     private val _repeatMode = MutableStateFlow(RepeatMode.NONE)
     val repeatMode: StateFlow<RepeatMode> = _repeatMode
 
+    /** 是否随机播放。ExoPlayer 原生支持 shuffleModeEnabled。 */
+    private val _isShuffle = MutableStateFlow(false)
+    val isShuffle: StateFlow<Boolean> = _isShuffle
+
     /** 是否正在缓冲/加载（含懒解析音频地址阶段）。 */
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -108,6 +112,13 @@ class PlaybackManager @Inject constructor(
             try {
                 mediaController = future.get()
                 mediaController?.addListener(playerListener)
+                // 连接后同步随机/循环模式到 Player，避免重建 controller 后状态丢失
+                mediaController?.shuffleModeEnabled = _isShuffle.value
+                mediaController?.repeatMode = when (_repeatMode.value) {
+                    RepeatMode.NONE -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                    RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                    RepeatMode.ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                }
             } catch (e: Exception) {
                 // MediaController 连接失败不应导致应用崩溃
                 e.printStackTrace()
@@ -187,6 +198,21 @@ class PlaybackManager @Inject constructor(
         }
     }
 
+    /**
+     * 清空整个播放列表并停止播放。
+     */
+    fun clearPlaylist() {
+        _playlist.value = emptyList()
+        _currentTrack.value = null
+        _currentIndex.value = -1
+        _currentPosition.value = 0L
+        _duration.value = 0L
+        _playbackError.value = null
+        _isPlaying.value = false
+        _isLoading.value = false
+        mediaController?.clearMediaItems()
+    }
+
     fun playAt(index: Int) {
         if (index in _playlist.value.indices) {
             _playbackError.value = null
@@ -207,6 +233,15 @@ class PlaybackManager @Inject constructor(
             RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
             RepeatMode.ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
         }
+    }
+
+    /**
+     * 切换随机播放。ExoPlayer 原生 shuffle 会打乱播放顺序，
+     * 但不影响播放列表数据本身。
+     */
+    fun toggleShuffle() {
+        _isShuffle.value = !_isShuffle.value
+        mediaController?.shuffleModeEnabled = _isShuffle.value
     }
 
     fun updateProgress() {

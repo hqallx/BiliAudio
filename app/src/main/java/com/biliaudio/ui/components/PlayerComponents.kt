@@ -17,14 +17,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -125,6 +126,7 @@ fun MiniPlayer(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     track: Track?,
@@ -132,17 +134,26 @@ fun PlayerScreen(
     currentPosition: Long,
     duration: Long,
     repeatMode: RepeatMode,
+    isShuffle: Boolean,
     isLoading: Boolean,
     playbackError: String?,
+    playlist: List<Track>,
+    currentIndex: Int,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onToggleRepeat: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onPlayAt: (Int) -> Unit,
+    onRemoveFromPlaylist: (Int) -> Unit,
+    onClearPlaylist: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showPlaylistSheet by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -150,7 +161,9 @@ fun PlayerScreen(
             .statusBarsPadding()
             .padding(horizontal = 24.dp),
     ) {
-        // ===== 顶栏：收起 + 标题 + 更多 =====
+        // ===== 顶栏：收起 + 标题 =====
+        // 移除原「更多」按钮：其依赖的菜单项（定时器/倍速等）尚未实现，
+        // 保留空点击会误导用户，待相关功能落地后再恢复入口。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -171,13 +184,8 @@ fun PlayerScreen(
                 color = PlayerTextPrimary
             )
             Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = { /* TODO: 打开更多菜单 */ }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "更多",
-                    tint = PlayerTextPrimary
-                )
-            }
+            // 占位，保持标题视觉居中
+            Spacer(modifier = Modifier.size(48.dp))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -265,29 +273,18 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ===== 标题 + 收藏 =====
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = track?.title ?: "未播放",
-                style = MaterialTheme.typography.titleLarge,
-                color = PlayerTextPrimary,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            IconButton(onClick = { /* TODO: 收藏切换 */ }) {
-                Icon(
-                    imageVector = Icons.Default.FavoriteBorder,
-                    contentDescription = "收藏",
-                    tint = PlayerTextSecondary
-                )
-            }
-        }
+        // ===== 标题 =====
+        // 移除原「收藏」按钮：收藏需调用B站收藏夹 deal 接口 + 收藏夹选择 UI，
+        // 属未实现功能，保留空点击会误导用户，待收藏功能落地后再恢复入口。
+        Text(
+            text = track?.title ?: "未播放",
+            style = MaterialTheme.typography.titleLarge,
+            color = PlayerTextPrimary,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // ===== 副标题（UP主/作者） =====
         Text(
@@ -391,7 +388,9 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ===== 底部副控制：顺序 / 随机 / 评论 / 列表 =====
+        // ===== 底部副控制：循环 / 随机 / 列表 =====
+        // 移除原「评论」按钮：评论需调用B站评论接口，属未实现功能，
+        // 保留空点击会误导用户，待评论功能落地后再恢复入口。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -409,27 +408,171 @@ fun PlayerScreen(
                     tint = if (repeatMode != RepeatMode.NONE) PlayerBlue else PlayerTextSecondary
                 )
             }
-            IconButton(onClick = { /* TODO: 切换随机播放 */ }) {
+            IconButton(onClick = { onToggleShuffle() }) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "随机播放",
-                    tint = PlayerTextSecondary
+                    tint = if (isShuffle) PlayerBlue else PlayerTextSecondary
                 )
             }
-            IconButton(onClick = { /* TODO: 打开评论 */ }) {
-                Icon(
-                    imageVector = Icons.Default.ChatBubbleOutline,
-                    contentDescription = "评论",
-                    tint = PlayerTextSecondary
-                )
-            }
-            IconButton(onClick = { /* TODO: 打开当前播放列表 */ }) {
+            IconButton(onClick = { showPlaylistSheet = true }) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
                     contentDescription = "播放列表",
                     tint = PlayerTextSecondary
                 )
             }
+        }
+    }
+
+    // ===== 当前播放列表 BottomSheet =====
+    if (showPlaylistSheet) {
+        PlaylistBottomSheet(
+            playlist = playlist,
+            currentIndex = currentIndex,
+            onPlayAt = { index ->
+                onPlayAt(index)
+            },
+            onRemoveFromPlaylist = onRemoveFromPlaylist,
+            onClearPlaylist = onClearPlaylist,
+            onDismiss = { showPlaylistSheet = false }
+        )
+    }
+}
+
+/**
+ * 播放页内嵌的播放列表底部弹层。
+ * 支持点击播放、删除单项、清空全部，复用 [PlaylistScreen] 的列表项样式。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaylistBottomSheet(
+    playlist: List<Track>,
+    currentIndex: Int,
+    onPlayAt: (Int) -> Unit,
+    onRemoveFromPlaylist: (Int) -> Unit,
+    onClearPlaylist: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "播放列表",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${playlist.size} 首",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            if (playlist.isNotEmpty()) {
+                IconButton(onClick = {
+                    onClearPlaylist()
+                    onDismiss()
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "清空播放列表",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (playlist.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "播放列表为空",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    bottom = 24.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(playlist) { track ->
+                    val index = playlist.indexOf(track)
+                    PlaylistSheetItem(
+                        track = track,
+                        isPlaying = index == currentIndex,
+                        onPlayClick = { onPlayAt(index) },
+                        onRemoveClick = { onRemoveFromPlaylist(index) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistSheetItem(
+    track: Track,
+    isPlaying: Boolean,
+    onPlayClick: () -> Unit,
+    onRemoveClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onPlayClick() }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = track.coverUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (isPlaying) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onRemoveClick) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "移除",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -523,14 +666,6 @@ private fun LinearProgressBar(
             radius = thumbRadius,
             center = Offset(playedEnd, centerY)
         )
-    }
-}
-
-private fun getRepeatIcon(repeatMode: RepeatMode): androidx.compose.ui.graphics.vector.ImageVector {
-    return when (repeatMode) {
-        RepeatMode.NONE -> Icons.Default.Repeat
-        RepeatMode.ALL -> Icons.Default.Repeat
-        RepeatMode.ONE -> Icons.Default.RepeatOne
     }
 }
 

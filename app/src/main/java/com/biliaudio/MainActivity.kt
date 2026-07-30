@@ -93,8 +93,11 @@ fun AppRoot(
     val currentPosition by playerViewModel.currentPosition.collectAsStateWithLifecycle()
     val duration by playerViewModel.duration.collectAsStateWithLifecycle()
     val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
+    val isShuffle by playerViewModel.isShuffle.collectAsStateWithLifecycle()
     val isPlayerLoading by playerViewModel.isLoading.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playbackError.collectAsStateWithLifecycle()
+    val playlist by playerViewModel.playlist.collectAsStateWithLifecycle()
+    val currentIndex by playerViewModel.currentIndex.collectAsStateWithLifecycle()
 
     val toast by authViewModel.toast.collectAsStateWithLifecycle()
     val favToast by favoriteViewModel.toast.collectAsStateWithLifecycle()
@@ -287,13 +290,20 @@ fun AppRoot(
             currentPosition = currentPosition,
             duration = duration,
             repeatMode = repeatMode,
+            isShuffle = isShuffle,
             isLoading = isPlayerLoading,
             playbackError = playerError,
+            playlist = playlist,
+            currentIndex = currentIndex,
             onPlayPause = { playerViewModel.togglePlayPause() },
             onSeek = { position -> playerViewModel.seekTo(position) },
             onNext = { playerViewModel.next() },
             onPrevious = { playerViewModel.previous() },
             onToggleRepeat = { playerViewModel.toggleRepeatMode() },
+            onToggleShuffle = { playerViewModel.toggleShuffle() },
+            onPlayAt = { index -> playerViewModel.playAt(index) },
+            onRemoveFromPlaylist = { index -> playerViewModel.removeFromPlaylist(index) },
+            onClearPlaylist = { playerViewModel.clearPlaylist() },
             onRetry = { playerViewModel.retry() },
             onDismiss = { showPlayer = false }
         )

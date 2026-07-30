@@ -66,10 +66,10 @@ fun PlaylistScreen(
                 },
                 actions = {
                     if (playlist.isNotEmpty()) {
-                        IconButton(onClick = { }) {
+                        IconButton(onClick = { playerViewModel.clearPlaylist() }) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = null
+                                contentDescription = "清空播放列表"
                             )
                         }
                     }
@@ -127,6 +127,7 @@ fun PlaylistScreen(
                         onRemoveClick = {
                             val index = playlist.indexOf(track)
                             if (index >= 0) {
+                                playerViewModel.removeFromPlaylist(index)
                             }
                         }
                     )
