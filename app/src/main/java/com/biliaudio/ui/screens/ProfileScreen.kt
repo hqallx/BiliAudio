@@ -1,5 +1,6 @@
 package com.biliaudio.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,9 +15,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -29,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,18 +44,33 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.ui.viewmodel.AuthViewModel
+import com.biliaudio.ui.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
     onLogout: () -> Unit = {}
 ) {
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val audioQuality by settingsViewModel.audioQuality.collectAsState()
+    val settingsToast by settingsViewModel.toast.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showQualityDialog by remember { mutableStateOf(false) }
+
+    // 设置操作 toast 用 Snackbar 展示
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(settingsToast) {
+        settingsToast?.let {
+            snackbarHostState.showSnackbar(it)
+            settingsViewModel.consumeToast()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -109,6 +127,24 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        // 等级标签：数据已由 NavInfo.toUserInfo() 映射，此处展示。
+                        if (isLoggedIn && (userInfo?.level ?: 0) > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = "LV ${userInfo?.level}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
                         if (isLoggedIn) {
                             userInfo?.sign?.let {
                                 Text(
@@ -148,10 +184,23 @@ fun ProfileScreen(
                 )
             ) {
                 Column {
+                    // 音质偏好：点击弹窗选择，影响后续懒解析的音频流选取
+                    val qualityName = settingsViewModel.audioQualityOptions
+                        .firstOrNull { it.first == audioQuality }?.second
+                        ?: "192K（推荐）"
                     SettingsItem(
-                        icon = Icons.Default.Palette,
-                        title = "主题",
-                        subtitle = "Material You 动态配色"
+                        icon = Icons.Default.GraphicEq,
+                        title = "音质偏好",
+                        subtitle = qualityName,
+                        onClick = { showQualityDialog = true }
+                    )
+
+                    // 缓存清理：清空已缓存的音频地址
+                    SettingsItem(
+                        icon = Icons.Default.CleaningServices,
+                        title = "清理缓存",
+                        subtitle = "清除已缓存的音频地址",
+                        onClick = { settingsViewModel.clearCache() }
                     )
 
                     SettingsItem(
@@ -198,6 +247,48 @@ fun ProfileScreen(
                 dismissButton = {
                     TextButton(onClick = { showLogoutDialog = false }) {
                         Text("取消")
+                    }
+                }
+            )
+        }
+
+        // 音质偏好选择对话框
+        if (showQualityDialog) {
+            AlertDialog(
+                onDismissRequest = { showQualityDialog = false },
+                title = { Text("音质偏好") },
+                text = {
+                    Column {
+                        settingsViewModel.audioQualityOptions.forEach { (id, name) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .clickable {
+                                        settingsViewModel.setAudioQuality(id)
+                                        showQualityDialog = false
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = id == audioQuality || (audioQuality == 0 && id == 30280),
+                                    onClick = {
+                                        settingsViewModel.setAudioQuality(id)
+                                        showQualityDialog = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showQualityDialog = false }) {
+                        Text("关闭")
                     }
                 }
             )

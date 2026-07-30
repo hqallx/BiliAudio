@@ -11,8 +11,14 @@ import androidx.media3.session.SessionToken
 import com.biliaudio.data.model.Track
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +28,11 @@ class PlaybackManager @Inject constructor(
 ) {
 
     private var mediaController: MediaController? = null
+
+    // 睡眠定时器用的协程作用域，与 ViewModel 生命周期解耦，
+    // 避免关闭播放页弹层后定时器被取消。
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var sleepTimerJob: Job? = null
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
@@ -47,6 +58,17 @@ class PlaybackManager @Inject constructor(
     /** 是否随机播放。ExoPlayer 原生支持 shuffleModeEnabled。 */
     private val _isShuffle = MutableStateFlow(false)
     val isShuffle: StateFlow<Boolean> = _isShuffle
+
+    /** 当前播放倍速，1.0f 为正常速度。 */
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed
+
+    /**
+     * 睡眠定时器剩余分钟数，0 表示未启用。
+     * UI 据此显示倒计时入口/剩余时间。到点自动暂停播放。
+     */
+    private val _sleepTimerMinutes = MutableStateFlow(0)
+    val sleepTimerMinutes: StateFlow<Int> = _sleepTimerMinutes
 
     /** 是否正在缓冲/加载（含懒解析音频地址阶段）。 */
     private val _isLoading = MutableStateFlow(false)
@@ -114,6 +136,7 @@ class PlaybackManager @Inject constructor(
                 mediaController?.addListener(playerListener)
                 // 连接后同步随机/循环模式到 Player，避免重建 controller 后状态丢失
                 mediaController?.shuffleModeEnabled = _isShuffle.value
+                mediaController?.playbackSpeed = _playbackSpeed.value
                 mediaController?.repeatMode = when (_repeatMode.value) {
                     RepeatMode.NONE -> androidx.media3.common.Player.REPEAT_MODE_OFF
                     RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
@@ -189,6 +212,18 @@ class PlaybackManager @Inject constructor(
         mediaController?.addMediaItem(track.toMediaItem())
     }
 
+    /**
+     * 插入到当前播放曲目之后（「下一首播放」）。
+     * 无当前曲目时退化为追加到末尾。
+     */
+    fun addNext(track: Track) {
+        val currentList = _playlist.value.toMutableList()
+        val insertPos = (_currentIndex.value + 1).coerceAtLeast(currentList.size)
+        currentList.add(insertPos, track)
+        _playlist.value = currentList
+        mediaController?.addMediaItem(insertPos, track.toMediaItem())
+    }
+
     fun removeFromPlaylist(index: Int) {
         val currentList = _playlist.value.toMutableList()
         if (index in currentList.indices) {
@@ -242,6 +277,45 @@ class PlaybackManager @Inject constructor(
     fun toggleShuffle() {
         _isShuffle.value = !_isShuffle.value
         mediaController?.shuffleModeEnabled = _isShuffle.value
+    }
+
+    /**
+     * 设置播放倍速。ExoPlayer 原生支持 playbackSpeed。
+     * @param speed 倍速值，范围 0.25f ~ 3.0f
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        val safeSpeed = speed.coerceIn(0.25f, 3.0f)
+        _playbackSpeed.value = safeSpeed
+        mediaController?.playbackSpeed = safeSpeed
+    }
+
+    // ============ 睡眠定时器 ============
+
+    /**
+     * 启动睡眠定时器，到点自动暂停播放。
+     * @param minutes 倒计时分钟数，<=0 视为取消
+     */
+    fun startSleepTimer(minutes: Int) {
+        cancelSleepTimer()
+        if (minutes <= 0) return
+        _sleepTimerMinutes.value = minutes
+        sleepTimerJob = serviceScope.launch {
+            var remaining = minutes
+            while (remaining > 0) {
+                delay(60_000L) // 每分钟递减一次，刷新 UI 倒计时
+                remaining--
+                _sleepTimerMinutes.value = remaining
+            }
+            // 到点：暂停播放，保留定时器状态为 0（已结束）
+            mediaController?.pause()
+        }
+    }
+
+    /** 取消睡眠定时器。 */
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerMinutes.value = 0
     }
 
     fun updateProgress() {

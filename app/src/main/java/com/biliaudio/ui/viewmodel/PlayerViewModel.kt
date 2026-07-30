@@ -28,6 +28,8 @@ class PlayerViewModel @Inject constructor(
     val currentIndex: StateFlow<Int> = playbackManager.currentIndex
     val repeatMode: StateFlow<RepeatMode> = playbackManager.repeatMode
     val isShuffle: StateFlow<Boolean> = playbackManager.isShuffle
+    val playbackSpeed: StateFlow<Float> = playbackManager.playbackSpeed
+    val sleepTimerMinutes: StateFlow<Int> = playbackManager.sleepTimerMinutes
     val isLoading: StateFlow<Boolean> = playbackManager.isLoading
     val playbackError: StateFlow<String?> = playbackManager.playbackError
 
@@ -57,11 +59,15 @@ class PlayerViewModel @Inject constructor(
     fun setPlaylist(tracks: List<Track>, startIndex: Int = 0) =
         playbackManager.setPlaylist(tracks, startIndex)
     fun addToPlaylist(track: Track) = playbackManager.addToPlaylist(track)
+    fun addNext(track: Track) = playbackManager.addNext(track)
     fun removeFromPlaylist(index: Int) = playbackManager.removeFromPlaylist(index)
     fun clearPlaylist() = playbackManager.clearPlaylist()
     fun playAt(index: Int) = playbackManager.playAt(index)
     fun toggleRepeatMode() = playbackManager.toggleRepeatMode()
     fun toggleShuffle() = playbackManager.toggleShuffle()
+    fun setPlaybackSpeed(speed: Float) = playbackManager.setPlaybackSpeed(speed)
+    fun startSleepTimer(minutes: Int) = playbackManager.startSleepTimer(minutes)
+    fun cancelSleepTimer() = playbackManager.cancelSleepTimer()
     fun retry() = playbackManager.retry()
 
     override fun onCleared() {

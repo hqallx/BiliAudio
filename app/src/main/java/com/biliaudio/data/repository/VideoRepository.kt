@@ -8,12 +8,14 @@ import com.biliaudio.data.model.Track
 import com.biliaudio.data.model.VideoItem
 import com.biliaudio.data.model.VideoStreamResponse
 import com.biliaudio.data.network.BiliApi
+import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.resultOf
 import com.biliaudio.data.toHttpsUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URLEncoder
@@ -22,7 +24,8 @@ import javax.inject.Singleton
 
 @Singleton
 class VideoRepository @Inject constructor(
-    private val api: BiliApi
+    private val api: BiliApi,
+    private val preferencesManager: PreferencesManager
 ) {
 
     private val cache = LinkedHashMap<String, CacheEntry>()
@@ -107,7 +110,7 @@ class VideoRepository @Inject constructor(
     /**
      * 从 playurl 响应中按优先级选择最优音频流地址。
      */
-    private fun pickBestAudioUrl(response: BiliResponse<VideoStreamResponse>): String? {
+    private suspend fun pickBestAudioUrl(response: BiliResponse<VideoStreamResponse>): String? {
         val data = response.data ?: return null
         val dash = data.dash
 
@@ -124,16 +127,19 @@ class VideoRepository @Inject constructor(
 
     /**
      * 参考 BBPlayer 的音频流优先级选择。
+     * 指定质量取用户偏好（设置页可配），0/无效时退回默认 192K AAC。
      */
-    private fun selectBestAudio(dash: DashData): String? {
+    private suspend fun selectBestAudio(dash: DashData): String? {
         // 1. 杜比全景声（最高优先级）
         dash.dolby?.audio?.firstOrNull()?.url?.takeIf { it.isNotEmpty() }?.let { return it }
 
         // 2. Hi-Res 无损
         dash.flac?.audio?.url?.takeIf { it.isNotEmpty() }?.let { return it }
 
-        // 3. 指定质量（192K AAC），保证加载速度与音质均衡
-        dash.audio.find { it.id == BiliConstants.AudioQuality.AAC_192K }
+        // 3. 用户偏好的指定质量，0/无效时退回默认 192K AAC
+        val preferred = preferencesManager.audioQuality.first()
+        val targetQuality = if (preferred > 0) preferred else BiliConstants.AudioQuality.AAC_192K
+        dash.audio.find { it.id == targetQuality }
             ?.url?.takeIf { it.isNotEmpty() }?.let { return it }
 
         // 4. 清单中最高质量（B站返回的 audio 列表已按质量从高到低排序）

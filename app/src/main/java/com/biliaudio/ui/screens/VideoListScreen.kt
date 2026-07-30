@@ -181,6 +181,10 @@ fun VideoListScreen(
                                     playerViewModel.addToPlaylist(track)
                                     playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
                                 }
+                            },
+                            onAddNext = {
+                                // 下一首播放：插队到当前曲目之后
+                                playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
                             }
                         )
                     }
@@ -226,6 +230,10 @@ fun VideoListScreen(
                         val track = favoriteViewModel.videoToLazyTrack(video)
                         playerViewModel.addToPlaylist(track)
                         playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
+                    },
+                    onAddNext = {
+                        // 下一首播放：插队到当前曲目之后
+                        playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
                     }
                 )
             }

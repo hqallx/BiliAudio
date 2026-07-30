@@ -25,6 +25,8 @@ class PreferencesManager(private val context: Context) {
     private val playlistKey = stringPreferencesKey("playlist")
     private val currentIndexKey = intPreferencesKey("current_index")
     private val positionKey = longPreferencesKey("position")
+    // 音质偏好：对应 BiliConstants.AudioQuality 的 id（30280/30232/30216）
+    private val audioQualityKey = intPreferencesKey("audio_quality")
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -35,6 +37,9 @@ class PreferencesManager(private val context: Context) {
     val userName: Flow<String> = context.dataStore.data.map { it[userNameKey] ?: "" }
 
     val userAvatar: Flow<String> = context.dataStore.data.map { it[userAvatarKey] ?: "" }
+
+    /** 用户偏好的音频质量 id，0 表示使用默认（192K AAC）。 */
+    val audioQuality: Flow<Int> = context.dataStore.data.map { it[audioQualityKey] ?: 0 }
 
     val savedPlaylist: Flow<List<Track>> = context.dataStore.data.map { data ->
         val str = data[playlistKey] ?: ""
@@ -66,6 +71,11 @@ class PreferencesManager(private val context: Context) {
             it[currentIndexKey] = index
             it[positionKey] = position
         }
+    }
+
+    /** 保存音频质量偏好。quality 为 BiliConstants.AudioQuality 的 id。 */
+    suspend fun saveAudioQuality(quality: Int) {
+        context.dataStore.edit { it[audioQualityKey] = quality }
     }
 
     suspend fun clearPlaybackState() {

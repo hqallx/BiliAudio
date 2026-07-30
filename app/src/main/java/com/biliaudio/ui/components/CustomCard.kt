@@ -41,7 +41,9 @@ fun VideoCard(
     coverUrl: String,
     duration: String = "",
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 「下一首播放」回调，为 null 时不显示该入口。 */
+    onAddNext: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
@@ -108,6 +110,16 @@ fun VideoCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            // 「下一首播放」入口：将本曲目插入到当前播放曲目之后。
+            if (onAddNext != null) {
+                androidx.compose.material3.IconButton(onClick = onAddNext) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.PlaylistAdd,
+                        contentDescription = "下一首播放",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

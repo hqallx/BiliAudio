@@ -94,6 +94,8 @@ fun AppRoot(
     val duration by playerViewModel.duration.collectAsStateWithLifecycle()
     val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
     val isShuffle by playerViewModel.isShuffle.collectAsStateWithLifecycle()
+    val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
+    val sleepTimerMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val isPlayerLoading by playerViewModel.isLoading.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playbackError.collectAsStateWithLifecycle()
     val playlist by playerViewModel.playlist.collectAsStateWithLifecycle()
@@ -291,6 +293,8 @@ fun AppRoot(
             duration = duration,
             repeatMode = repeatMode,
             isShuffle = isShuffle,
+            playbackSpeed = playbackSpeed,
+            sleepTimerMinutes = sleepTimerMinutes,
             isLoading = isPlayerLoading,
             playbackError = playerError,
             playlist = playlist,
@@ -301,6 +305,9 @@ fun AppRoot(
             onPrevious = { playerViewModel.previous() },
             onToggleRepeat = { playerViewModel.toggleRepeatMode() },
             onToggleShuffle = { playerViewModel.toggleShuffle() },
+            onSetPlaybackSpeed = { speed -> playerViewModel.setPlaybackSpeed(speed) },
+            onStartSleepTimer = { minutes -> playerViewModel.startSleepTimer(minutes) },
+            onCancelSleepTimer = { playerViewModel.cancelSleepTimer() },
             onPlayAt = { index -> playerViewModel.playAt(index) },
             onRemoveFromPlaylist = { index -> playerViewModel.removeFromPlaylist(index) },
             onClearPlaylist = { playerViewModel.clearPlaylist() },

@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -135,6 +139,8 @@ fun PlayerScreen(
     duration: Long,
     repeatMode: RepeatMode,
     isShuffle: Boolean,
+    playbackSpeed: Float,
+    sleepTimerMinutes: Int,
     isLoading: Boolean,
     playbackError: String?,
     playlist: List<Track>,
@@ -145,6 +151,9 @@ fun PlayerScreen(
     onPrevious: () -> Unit,
     onToggleRepeat: () -> Unit,
     onToggleShuffle: () -> Unit,
+    onSetPlaybackSpeed: (Float) -> Unit,
+    onStartSleepTimer: (Int) -> Unit,
+    onCancelSleepTimer: () -> Unit,
     onPlayAt: (Int) -> Unit,
     onRemoveFromPlaylist: (Int) -> Unit,
     onClearPlaylist: () -> Unit,
@@ -153,6 +162,8 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     var showPlaylistSheet by remember { mutableStateOf(false) }
+    var showSpeedSheet by remember { mutableStateOf(false) }
+    var showSleepSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -298,6 +309,52 @@ fun PlayerScreen(
                 .padding(top = 4.dp)
         )
 
+        // ===== 倍速 / 睡眠定时器 快捷入口 =====
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 倍速：点击展开选择弹层，显示当前倍速值
+            AssistChip(
+                onClick = { showSpeedSheet = true },
+                label = { Text("${playbackSpeed}x") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                    containerColor = if (playbackSpeed != 1.0f) PlayerBlue.copy(alpha = 0.15f)
+                    else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+            // 睡眠定时器：未启用显示「定时」，启用中显示剩余分钟
+            AssistChip(
+                onClick = { showSleepSheet = true },
+                label = {
+                    Text(
+                        if (sleepTimerMinutes > 0) "定时 ${sleepTimerMinutes}min"
+                        else "定时关闭"
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Bedtime,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                    containerColor = if (sleepTimerMinutes > 0) PlayerBlue.copy(alpha = 0.15f)
+                    else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+        }
+
         Spacer(modifier = Modifier.weight(1f))
 
         // ===== 进度条 + 时间 =====
@@ -436,6 +493,30 @@ fun PlayerScreen(
             onRemoveFromPlaylist = onRemoveFromPlaylist,
             onClearPlaylist = onClearPlaylist,
             onDismiss = { showPlaylistSheet = false }
+        )
+    }
+
+    // ===== 倍速选择 BottomSheet =====
+    if (showSpeedSheet) {
+        SpeedPickerSheet(
+            currentSpeed = playbackSpeed,
+            onPick = { speed ->
+                onSetPlaybackSpeed(speed)
+                showSpeedSheet = false
+            },
+            onDismiss = { showSpeedSheet = false }
+        )
+    }
+
+    // ===== 睡眠定时器 BottomSheet =====
+    if (showSleepSheet) {
+        SleepTimerSheet(
+            currentMinutes = sleepTimerMinutes,
+            onPick = { minutes ->
+                if (minutes <= 0) onCancelSleepTimer() else onStartSleepTimer(minutes)
+                showSleepSheet = false
+            },
+            onDismiss = { showSleepSheet = false }
         )
     }
 }
@@ -682,4 +763,120 @@ fun formatDurationMinSec(durationSec: Int): String {
     val minutes = durationSec / 60
     val remainingSeconds = durationSec % 60
     return String.format("%d:%02d", minutes, remainingSeconds)
+}
+
+/**
+ * 倍速选择底部弹层。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedPickerSheet(
+    currentSpeed: Float,
+    onPick: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Text(
+            text = "播放倍速",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            speeds.forEach { speed ->
+                val selected = kotlin.math.abs(speed - currentSpeed) < 0.01f
+                androidx.compose.material3.FilterChip(
+                    selected = selected,
+                    onClick = { onPick(speed) },
+                    label = { Text("${speed}x") },
+                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = PlayerBlue,
+                        selectedLabelColor = Color.White
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 睡眠定时器底部弹层。
+ * minutes <= 0 表示「关闭定时」。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SleepTimerSheet(
+    currentMinutes: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // 选项：关闭、15、30、45、60、90 分钟
+    val options = listOf(0, 15, 30, 45, 60, 90)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Text(
+            text = "睡眠定时",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+        if (currentMinutes > 0) {
+            Text(
+                text = "当前剩余约 ${currentMinutes} 分钟",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            options.forEach { minutes ->
+                val selected = currentMinutes == minutes
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selected) PlayerBlue.copy(alpha = 0.12f)
+                            else Color.Transparent
+                        )
+                        .clickable { onPick(minutes) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (minutes == 0) "关闭定时" else "${minutes} 分钟后停止",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (selected) PlayerBlue
+                        else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = PlayerBlue
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
