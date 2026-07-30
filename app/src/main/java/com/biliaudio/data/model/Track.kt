@@ -12,5 +12,7 @@ data class Track(
     val duration: Long = 0,
     val bvid: String = "",
     val aid: Long = 0,
-    val cid: Long = 0
+    val cid: Long = 0,
+    val likeCount: Long = 0,
+    val commentCount: Long = 0
 )

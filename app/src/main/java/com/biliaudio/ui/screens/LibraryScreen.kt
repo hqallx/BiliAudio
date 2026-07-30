@@ -18,9 +18,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,7 +62,8 @@ import java.util.Locale
 private enum class LibraryTab(val label: String) {
     Favorites("收藏夹"),
     Seasons("合集"),
-    History("播放历史")
+    History("播放历史"),
+    Playlist("播放列表")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +84,11 @@ fun LibraryScreen(
     val isLoadingHistory by favoriteViewModel.isLoadingHistory.collectAsState()
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+
+    // 播放列表数据
+    val playlist by playerViewModel.playlist.collectAsState()
+    val currentIndex by playerViewModel.currentIndex.collectAsState()
+    val currentTrack by playerViewModel.currentTrack.collectAsState()
 
     var selectedTab by remember { mutableStateOf(LibraryTab.Favorites) }
 
@@ -206,6 +214,14 @@ fun LibraryScreen(
                             playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
                         }
                     }
+                )
+                LibraryTab.Playlist -> PlaylistTab(
+                    playlist = playlist,
+                    currentTrack = currentTrack,
+                    currentIndex = currentIndex,
+                    onPlayAt = { index -> playerViewModel.playAt(index) },
+                    onRemove = { index -> playerViewModel.removeFromPlaylist(index) },
+                    onClear = { playerViewModel.clearPlaylist() }
                 )
             }
         }
@@ -340,6 +356,60 @@ private fun EmptyState(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistTab(
+    playlist: List<com.biliaudio.data.model.Track>,
+    currentTrack: com.biliaudio.data.model.Track?,
+    currentIndex: Int,
+    onPlayAt: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+    onClear: () -> Unit
+) {
+    if (playlist.isEmpty()) {
+        EmptyState(icon = Icons.Default.QueueMusic, text = "播放列表为空")
+        return
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${playlist.size} 首",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onClear) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "清空播放列表",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        LazyColumn(
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(playlist) { track ->
+                val index = playlist.indexOf(track)
+                com.biliaudio.ui.components.VideoCard(
+                    title = track.title,
+                    artist = track.artist,
+                    coverUrl = track.coverUrl,
+                    duration = com.biliaudio.ui.components.formatDurationMinSec(
+                        (track.duration / 1000).toInt()
+                    ),
+                    onClick = { onPlayAt(index) }
+                )
+            }
         }
     }
 }

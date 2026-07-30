@@ -255,32 +255,14 @@ private fun AccountTab(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    if (isLoggedIn && (userInfo?.level ?: 0) > 0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            ) {
-                                Text(
-                                    text = "LV ${userInfo?.level}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
                     if (isLoggedIn) {
-                        userInfo?.sign?.let {
-                            Text(
-                                text = it.ifEmpty { "这个人很懒，什么都没有写" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                                maxLines = 2
-                            )
-                        }
+                        val sign = userInfo?.sign?.trim() ?: ""
+                        Text(
+                            text = sign.ifEmpty { "暂无简介" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            maxLines = 2
+                        )
                     } else {
                         Text(
                             text = "登录后可同步B站收藏夹",

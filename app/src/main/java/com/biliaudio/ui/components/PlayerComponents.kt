@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,13 +63,23 @@ import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import java.util.concurrent.TimeUnit
 
-// ====== 设计色板（参考 B站/网易云薄荷绿播放器） ======
-private val MintBackground = Color(0xFFE3F5EE)   // 整页薄荷绿底
-private val MintAccent = Color(0xFF66E0C2)       // 封面下方高亮条
-private val PlayerBlue = Color(0xFF1E88E5)        // 主控制/进度条 已播放部分
-private val PlayerTextPrimary = Color(0xFF1F1F1F)
-private val PlayerTextSecondary = Color(0xFF6F7A82)
-private val PlayerTrackBg = Color(0xFFE6E9EC)     // 未播放灰条
+// ====== 深色播放器色板（参考网易云/B站暗色播放器） ======
+private val DarkBg = Color(0xFF2C2C2C)
+private val DarkSurface = Color(0xFF3D3D3D)
+private val PlayerTextPrimary = Color(0xFFFFFFFF)
+private val PlayerTextSecondary = Color(0xFFAAAAAA)
+private val PlayerTextMuted = Color(0xFF888888)
+private val PlayerAccent = Color(0xFFFA7299)      // B站粉（点赞高亮）
+private val PlayerTrackBg = Color(0xFF555555)     // 未播放灰条
+private val PlayerTrackPlayed = Color(0xFFFFFFFF) // 已播放白条
+
+/** 格式化大数字：>1万显示 x.x万 */
+private fun formatCount(count: Long): String = when {
+    count >= 100_000 -> String.format("%.0f万", count / 10_000.0)
+    count >= 10_000 -> String.format("%.1f万", count / 10_000.0)
+    count > 0 -> count.toString()
+    else -> ""
+}
 
 @Composable
 fun MiniPlayer(
@@ -168,13 +181,11 @@ fun PlayerScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MintBackground)
+            .background(DarkBg)
             .statusBarsPadding()
             .padding(horizontal = 24.dp),
     ) {
         // ===== 顶栏：收起 + 标题 =====
-        // 移除原「更多」按钮：其依赖的菜单项（定时器/倍速等）尚未实现，
-        // 保留空点击会误导用户，待相关功能落地后再恢复入口。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -195,169 +206,191 @@ fun PlayerScreen(
                 color = PlayerTextPrimary
             )
             Spacer(modifier = Modifier.weight(1f))
-            // 占位，保持标题视觉居中
             Spacer(modifier = Modifier.size(48.dp))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ===== 封面 + 底部薄荷绿高亮条 =====
+        // ===== 封面大图 =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(320.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                ) {
-                    AsyncImage(
-                        model = track?.coverUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    // 加载态：懒解析音频地址 / 网络缓冲时显示。
-                    // 半透明遮罩 + 进度指示，避免长时间无反馈。
-                    if (isLoading && playbackError == null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0x66000000)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    color = Color.White
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "正在加载...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White
-                                )
-                            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                AsyncImage(
+                    model = track?.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (isLoading && playbackError == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x66000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.material3.CircularProgressIndicator(color = Color.White)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "正在加载...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White
+                            )
                         }
                     }
-                    // 错误态：展示错误信息与重试按钮。
-                    if (playbackError != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0x88000000)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = playbackError,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                }
+                if (playbackError != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x88000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = playbackError,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Button(
+                                onClick = onRetry,
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = PlayerAccent
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                androidx.compose.material3.Button(
-                                    onClick = onRetry,
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = PlayerBlue
-                                    )
-                                ) {
-                                    Text(text = "重试", color = Color.White)
-                                }
+                            ) {
+                                Text(text = "重试", color = Color.White)
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MintAccent)
-                )
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // ===== 标题 =====
-        // 移除原「收藏」按钮：收藏需调用B站收藏夹 deal 接口 + 收藏夹选择 UI，
-        // 属未实现功能，保留空点击会误导用户，待收藏功能落地后再恢复入口。
-        Text(
-            text = track?.title ?: "未播放",
-            style = MaterialTheme.typography.titleLarge,
-            color = PlayerTextPrimary,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // ===== 标题行 + 点赞/评论/更多 =====
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track?.title ?: "未播放",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = PlayerTextPrimary,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = track?.artist ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PlayerTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-        // ===== 副标题（UP主/作者） =====
-        Text(
-            text = track?.artist ?: "",
-            style = MaterialTheme.typography.bodyMedium,
-            color = PlayerTextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-        )
+            // 点赞
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.ThumbUp,
+                    contentDescription = "点赞",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = formatCount(track?.likeCount ?: 0),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PlayerTextMuted
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            // 评论
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.ModeComment,
+                    contentDescription = "评论",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = formatCount(track?.commentCount ?: 0),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PlayerTextMuted
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            // 更多
+            IconButton(onClick = { /* 更多菜单待实现 */ }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "更多",
+                    tint = PlayerTextMuted
+                )
+            }
+        }
 
         // ===== 倍速 / 睡眠定时器 快捷入口 =====
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .padding(top = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 倍速：点击展开选择弹层，显示当前倍速值
             AssistChip(
                 onClick = { showSpeedSheet = true },
-                label = { Text("${playbackSpeed}x") },
+                label = { Text("${playbackSpeed}x", color = PlayerTextSecondary) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Speed,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = PlayerTextSecondary
                     )
                 },
                 colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                    containerColor = if (playbackSpeed != 1.0f) PlayerBlue.copy(alpha = 0.15f)
-                    else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = DarkSurface
                 )
             )
-            // 睡眠定时器：未启用显示「定时」，启用中显示剩余分钟
             AssistChip(
                 onClick = { showSleepSheet = true },
                 label = {
                     Text(
                         if (sleepTimerMinutes > 0) "定时 ${sleepTimerMinutes}min"
-                        else "定时关闭"
+                        else "定时关闭",
+                        color = PlayerTextSecondary
                     )
                 },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Bedtime,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = PlayerTextSecondary
                     )
                 },
                 colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                    containerColor = if (sleepTimerMinutes > 0) PlayerBlue.copy(alpha = 0.15f)
-                    else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = DarkSurface
                 )
             )
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ===== 进度条 + 时间 =====
+        // ===== 进度条 + 时间 + 音质 =====
         LinearProgressBar(
             currentPosition = currentPosition,
             duration = duration,
@@ -375,16 +408,21 @@ fun PlayerScreen(
             Text(
                 text = formatDuration(currentPosition),
                 style = MaterialTheme.typography.bodySmall,
-                color = PlayerTextSecondary
+                color = PlayerTextMuted
+            )
+            Text(
+                text = "极高音质",
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerTextMuted
             )
             Text(
                 text = formatDuration(duration),
                 style = MaterialTheme.typography.bodySmall,
-                color = PlayerTextSecondary
+                color = PlayerTextMuted
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // ===== 主控制：上一首 / 播放暂停 / 下一首 =====
         Row(
@@ -404,29 +442,20 @@ fun PlayerScreen(
                 )
             }
 
-            // 蓝色描边圆形 + 内嵌白色暂停 / 播放
+            // 大圆形播放/暂停按钮
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
-                    .background(Color.Transparent)
-                    .clickable { onPlayPause() }
-                    .pointerInput(Unit) {
-                        // 仅用于触发点击，避免 IconButton 双层点击
-                    },
+                    .background(PlayerTextPrimary)
+                    .clickable { onPlayPause() },
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(PlayerBlue)
-                )
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "暂停" else "播放",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
+                    tint = DarkBg,
+                    modifier = Modifier.size(36.dp)
                 )
             }
 
@@ -446,8 +475,6 @@ fun PlayerScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // ===== 底部副控制：循环 / 随机 / 列表 =====
-        // 移除原「评论」按钮：评论需调用B站评论接口，属未实现功能，
-        // 保留空点击会误导用户，待评论功能落地后再恢复入口。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -462,34 +489,32 @@ fun PlayerScreen(
                     else
                         Icons.Default.Repeat,
                     contentDescription = "循环模式",
-                    tint = if (repeatMode != RepeatMode.NONE) PlayerBlue else PlayerTextSecondary
+                    tint = if (repeatMode != RepeatMode.NONE) PlayerAccent else PlayerTextMuted
                 )
             }
             IconButton(onClick = { onToggleShuffle() }) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "随机播放",
-                    tint = if (isShuffle) PlayerBlue else PlayerTextSecondary
+                    tint = if (isShuffle) PlayerAccent else PlayerTextMuted
                 )
             }
             IconButton(onClick = { showPlaylistSheet = true }) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
                     contentDescription = "播放列表",
-                    tint = PlayerTextSecondary
+                    tint = PlayerTextMuted
                 )
             }
         }
     }
 
-    // ===== 当前播放列表 BottomSheet =====
+    // ===== 播放列表 BottomSheet =====
     if (showPlaylistSheet) {
         PlaylistBottomSheet(
             playlist = playlist,
             currentIndex = currentIndex,
-            onPlayAt = { index ->
-                onPlayAt(index)
-            },
+            onPlayAt = { index -> onPlayAt(index) },
             onRemoveFromPlaylist = onRemoveFromPlaylist,
             onClearPlaylist = onClearPlaylist,
             onDismiss = { showPlaylistSheet = false }
@@ -523,7 +548,6 @@ fun PlayerScreen(
 
 /**
  * 播放页内嵌的播放列表底部弹层。
- * 支持点击播放、删除单项、清空全部，复用 [PlaylistScreen] 的列表项样式。
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -660,8 +684,8 @@ private fun PlaylistSheetItem(
 
 /**
  * 普通线性进度条。
- * - 已播放部分：蓝色圆角线
- * - 未播放部分：浅灰圆角线
+ * - 已播放部分：白色圆角线
+ * - 未播放部分：深灰圆角线
  * - 末端圆形滑块
  * - 支持点击 / 拖动跳转到指定位置
  */
@@ -723,27 +747,22 @@ private fun LinearProgressBar(
         val playedEnd = w * progress
         val thumbRadius = trackHeight * 1.4f
 
-        // —— 未播放部分：浅灰圆角条 ——
         drawRoundRect(
             color = PlayerTrackBg,
             topLeft = Offset(0f, centerY - trackHeight / 2f),
             size = androidx.compose.ui.geometry.Size(w, trackHeight),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight, trackHeight)
         )
-
-        // —— 已播放部分：蓝色圆角条 ——
         if (playedEnd > 0f) {
             drawRoundRect(
-                color = PlayerBlue,
+                color = PlayerTrackPlayed,
                 topLeft = Offset(0f, centerY - trackHeight / 2f),
                 size = androidx.compose.ui.geometry.Size(playedEnd, trackHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight, trackHeight)
             )
         }
-
-        // —— 末端圆形滑块 ——
         drawCircle(
-            color = PlayerBlue,
+            color = PlayerTrackPlayed,
             radius = thumbRadius,
             center = Offset(playedEnd, centerY)
         )
@@ -800,7 +819,7 @@ private fun SpeedPickerSheet(
                     onClick = { onPick(speed) },
                     label = { Text("${speed}x") },
                     colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PlayerBlue,
+                        selectedContainerColor = PlayerAccent,
                         selectedLabelColor = Color.White
                     )
                 )
@@ -811,7 +830,6 @@ private fun SpeedPickerSheet(
 
 /**
  * 睡眠定时器底部弹层。
- * minutes <= 0 表示「关闭定时」。
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -820,7 +838,6 @@ private fun SleepTimerSheet(
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 选项：关闭、15、30、45、60、90 分钟
     val options = listOf(0, 15, 30, 45, 60, 90)
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -854,7 +871,7 @@ private fun SleepTimerSheet(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (selected) PlayerBlue.copy(alpha = 0.12f)
+                            if (selected) PlayerAccent.copy(alpha = 0.12f)
                             else Color.Transparent
                         )
                         .clickable { onPick(minutes) }
@@ -864,7 +881,7 @@ private fun SleepTimerSheet(
                     Text(
                         text = if (minutes == 0) "关闭定时" else "${minutes} 分钟后停止",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = if (selected) PlayerBlue
+                        color = if (selected) PlayerAccent
                         else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
@@ -872,7 +889,7 @@ private fun SleepTimerSheet(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
-                            tint = PlayerBlue
+                            tint = PlayerAccent
                         )
                     }
                 }

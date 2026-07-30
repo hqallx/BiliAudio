@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,7 +49,6 @@ import com.biliaudio.ui.components.MiniPlayer
 import com.biliaudio.ui.components.PlayerScreen
 import com.biliaudio.ui.screens.LibraryScreen
 import com.biliaudio.ui.screens.LoginScreen
-import com.biliaudio.ui.screens.PlaylistScreen
 import com.biliaudio.ui.screens.ProfileScreen
 import com.biliaudio.ui.screens.VideoListScreen
 import com.biliaudio.ui.screens.VideoListSource
@@ -166,7 +164,6 @@ fun AppRoot(
 
     val items = listOf(
         BottomNavItem("library", "库", Icons.Default.LibraryBooks),
-        BottomNavItem("playlist", "播放列表", Icons.Default.QueueMusic),
         BottomNavItem("profile", "设置", Icons.Default.Settings)
     )
 
@@ -290,10 +287,6 @@ fun AppRoot(
                         playerViewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() }
                     )
-                }
-
-                composable("playlist") {
-                    PlaylistScreen(playerViewModel = playerViewModel)
                 }
 
                 composable("profile") {
