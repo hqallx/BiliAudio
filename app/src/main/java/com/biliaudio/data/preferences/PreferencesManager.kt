@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,6 +28,8 @@ class PreferencesManager(private val context: Context) {
     private val positionKey = longPreferencesKey("position")
     // 音质偏好：对应 BiliConstants.AudioQuality 的 id（30280/30232/30216）
     private val audioQualityKey = intPreferencesKey("audio_quality")
+    // 调试日志开关
+    private val debugEnabledKey = booleanPreferencesKey("debug_enabled")
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -40,6 +43,9 @@ class PreferencesManager(private val context: Context) {
 
     /** 用户偏好的音频质量 id，0 表示使用默认（192K AAC）。 */
     val audioQuality: Flow<Int> = context.dataStore.data.map { it[audioQualityKey] ?: 0 }
+
+    /** 调试日志开关，默认关闭。 */
+    val debugEnabled: Flow<Boolean> = context.dataStore.data.map { it[debugEnabledKey] ?: false }
 
     val savedPlaylist: Flow<List<Track>> = context.dataStore.data.map { data ->
         val str = data[playlistKey] ?: ""
@@ -76,6 +82,11 @@ class PreferencesManager(private val context: Context) {
     /** 保存音频质量偏好。quality 为 BiliConstants.AudioQuality 的 id。 */
     suspend fun saveAudioQuality(quality: Int) {
         context.dataStore.edit { it[audioQualityKey] = quality }
+    }
+
+    /** 保存调试日志开关。 */
+    suspend fun saveDebugEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[debugEnabledKey] = enabled }
     }
 
     suspend fun clearPlaybackState() {

@@ -11,6 +11,7 @@ import com.biliaudio.data.repository.NavResult
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.repository.AuthRepository
 import com.biliaudio.ui.components.GeeTestResult
+import com.biliaudio.util.DebugLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -81,10 +82,17 @@ class AuthViewModel @Inject constructor(
         // 整个 init 用 try-catch 包裹，防止任何异常导致 ViewModel 创建失败
         // 进而触发 Hilt 崩溃（表现为「杀进程重进闪退」）。
         try {
+            // 同步检查 Cookie（BiliCookieJar 已在构造时同步恢复 Cookie 到内存）。
+            // 必须同步设置 _isLoggedIn 初值：NavHost 的 startDestination 在首次组合时
+            // 就会读取 isLoggedIn，若初值为 false 会先路由到 login 页闪现登录界面，
+            // 即使 Cookie 有效也会让用户误以为「划掉后台后登录失效」。
+            val hasLogin = authRepository.isLoggedIn()
+            _isLoggedIn.value = hasLogin
+            DebugLogger.d("AuthVM", "init sync: isLoggedIn=$hasLogin, cookies=${authRepository.cookieSnapshot().take(80)}")
+
             viewModelScope.launch {
                 try {
-                    val hasLogin = authRepository.isLoggedIn()
-                    _isLoggedIn.value = hasLogin
+                    DebugLogger.d("AuthVM", "init async: isLoggedIn=${_isLoggedIn.value}")
                     if (hasLogin) {
                         // 从持久化的 Cookie 中恢复基本用户信息（mid），
                         // 即使 nav 接口暂时失败也能在「我的」页面显示已登录
@@ -92,6 +100,7 @@ class AuthViewModel @Inject constructor(
                         loadUserInfo()
                     }
                 } catch (e: Exception) {
+                    DebugLogger.e("AuthVM", "init 检查登录失败", e)
                     e.printStackTrace()
                 }
             }
@@ -425,8 +434,10 @@ class AuthViewModel @Inject constructor(
         userJob?.cancel()
         userJob = viewModelScope.launch {
             try {
+                DebugLogger.d("AuthVM", "loadUserInfo: 调用 nav")
                 when (val result = authRepository.getUserInfo()) {
                     is NavResult.LoggedIn -> {
+                        DebugLogger.d("AuthVM", "nav 成功: mid=${result.userInfo.mid}")
                         // 接口明确返回已登录：更新完整用户信息并持久化
                         _userInfo.value = result.userInfo
                         preferencesManager.saveUserInfo(
@@ -436,6 +447,7 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                     is NavResult.NotLoggedIn -> {
+                        DebugLogger.w("AuthVM", "nav 返回 NotLoggedIn，开始重试")
                         // 接口明确返回未登录（code=-101 或 isLogin=false）。
                         // 划掉后台/冷启动恢复时 nav 接口可能瞬时返回 -101
                         // （Cookie 时序、服务端缓存、网络抖动等），若直接 logout
@@ -448,10 +460,12 @@ class AuthViewModel @Inject constructor(
                             for (attempt in 1..3) {
                                 delay(1500L * attempt)
                                 retryResult = authRepository.getUserInfo()
+                                DebugLogger.d("AuthVM", "nav 第${attempt}次重试: $retryResult")
                                 if (retryResult is NavResult.LoggedIn) break
                             }
                             when (retryResult) {
                                 is NavResult.LoggedIn -> {
+                                    DebugLogger.d("AuthVM", "重试后成功")
                                     _userInfo.value = retryResult.userInfo
                                     preferencesManager.saveUserInfo(
                                         id = retryResult.userInfo.mid.toString(),
@@ -461,6 +475,7 @@ class AuthViewModel @Inject constructor(
                                 }
                                 is NavResult.NotLoggedIn -> {
                                     // 不 logout 不清 Cookie：保留登录态，提示用户网络可能异常。
+                                    DebugLogger.w("AuthVM", "3 次重试仍 NotLoggedIn，保留登录态")
                                     _toast.value = "登录状态校验失败，请检查网络后稍后重试"
                                     if (_userInfo.value == null) {
                                         restoreBasicUserInfo()
@@ -475,6 +490,7 @@ class AuthViewModel @Inject constructor(
                         }
                     }
                     is NavResult.Failed -> {
+                        DebugLogger.w("AuthVM", "nav Failed: ${result.message}")
                         // 网络/解析错误：Cookie 可能仍有效，不登出。
                         // 用 Cookie 中的 mid 做兜底，避免「我的」页面误显示未登录。
                         if (_userInfo.value == null) {
@@ -483,6 +499,7 @@ class AuthViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                DebugLogger.e("AuthVM", "loadUserInfo 异常", e)
                 e.printStackTrace()
                 // 兜底：异常时不登出，尽量显示已有信息
                 if (_userInfo.value == null) {

@@ -61,10 +61,10 @@ import java.util.Date
 import java.util.Locale
 
 private enum class LibraryTab(val label: String) {
+    Playlist("播放列表"),
     Favorites("收藏夹"),
     Seasons("合集"),
-    History("播放历史"),
-    Playlist("播放列表")
+    History("播放历史")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,7 +91,7 @@ fun LibraryScreen(
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val currentTrack by playerViewModel.currentTrack.collectAsState()
 
-    var selectedTab by remember { mutableStateOf(LibraryTab.Favorites) }
+    var selectedTab by remember { mutableStateOf(LibraryTab.Playlist) }
 
     // 首次使用或登录成功后，FavoriteViewModel.init 可能因登录态尚未就绪而拿不到 mid，
     // 导致收藏夹/合集为空、需用户手动刷新。这里监听登录状态变化，登录后自动加载。

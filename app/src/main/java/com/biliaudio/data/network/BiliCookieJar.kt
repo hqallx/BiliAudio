@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import com.biliaudio.util.DebugLogger
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -29,9 +30,11 @@ class BiliCookieJar(context: Context) : CookieJar {
     init {
         try {
             restore()
+            DebugLogger.d("CookieJar", "init restore 完成，cookie 数=${getAllCookies().size}, names=${getAllCookies().map { it.name }}")
         } catch (e: Throwable) {
             // Cookie 恢复失败不应阻塞应用启动。
             // 清除损坏的 Cookie 数据，避免下次启动再次崩溃。
+            DebugLogger.e("CookieJar", "init restore 失败", e)
             e.printStackTrace()
             prefs.edit().remove("cookies").apply()
             cookieStore.clear()
@@ -40,6 +43,7 @@ class BiliCookieJar(context: Context) : CookieJar {
             ensureBuvid3()
         } catch (e: Throwable) {
             // buvid3 生成失败不应阻塞应用启动
+            DebugLogger.e("CookieJar", "ensureBuvid3 失败", e)
             e.printStackTrace()
         }
     }

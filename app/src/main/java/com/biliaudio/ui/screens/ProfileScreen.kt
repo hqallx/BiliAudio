@@ -1,10 +1,12 @@
 package com.biliaudio.ui.screens
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,27 +15,33 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,8 +52,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.UserInfo
@@ -54,13 +65,23 @@ import com.biliaudio.ui.viewmodel.SettingsViewModel
 
 /** 浅蓝灰底色，与截图风格一致 */
 private val ScreenBg = Color(0xFFF1F3F8)
-private val GroupBg = Color(0xFFFFFFFF)
+/** 文字底色与页面背景一致，避免出现白色底 */
+private val GroupBg = Color.Transparent
+
+/**
+ * 元素整体缩放系数：用户要求缩小到原来的 90%。
+ */
+private const val SCALE = 0.9f
+private fun Int.scaled() = (this * SCALE).dp
 
 /**
  * 设置页（截图风格）。
- * - 浅蓝灰背景，白底分组卡片
+ * - 浅蓝灰背景，文字无白色底（分组卡片透明，直接落在页面背景上）
  * - 单条列表项：左图标 + 标题 + 右 chevron；无副标题、无红点
  * - 退出登录/切换账号 使用纯文字按钮
+ * - 各元素尺寸为原来的 90%
+ * - 状态栏颜色与页面背景一致
+ * - 提供调试模式开关与日志查看
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,9 +93,11 @@ fun ProfileScreen(
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
     val audioQuality by settingsViewModel.audioQuality.collectAsState()
+    val debugEnabled by settingsViewModel.debugEnabled.collectAsState()
     val settingsToast by settingsViewModel.toast.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showDebugLog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(settingsToast) {
@@ -84,23 +107,32 @@ fun ProfileScreen(
         }
     }
 
+    // 状态栏颜色与设置页背景一致，离开时恢复透明（与其他页面保持一致）
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        DisposableEffect(Unit) {
+            val window = (view.context as Activity).window
+            val originalColor = window.statusBarColor
+            val controller = WindowCompat.getInsetsController(window, view)
+            val originalLight = controller.isAppearanceLightStatusBars
+            window.statusBarColor = ScreenBg.toArgb()
+            // 浅色背景配深色状态栏图标
+            controller.isAppearanceLightStatusBars = true
+            onDispose {
+                window.statusBarColor = originalColor
+                controller.isAppearanceLightStatusBars = originalLight
+            }
+        }
+    }
+
     Scaffold(
         containerColor = ScreenBg,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = ScreenBg
                 ),
-                navigationIcon = {
-                    IconButton(onClick = { /* 由导航回退 */ }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "返回",
-                            tint = Color(0xFF1F1F1F)
-                        )
-                    }
-                },
                 title = {
                     Box(
                         modifier = Modifier.fillMaxWidth(),
@@ -112,8 +144,7 @@ fun ProfileScreen(
                             color = Color(0xFF1F1F1F)
                         )
                     }
-                },
-                actions = { Spacer(modifier = Modifier.width(48.dp)) }
+                }
             )
         }
     ) { paddingValues ->
@@ -122,7 +153,8 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .background(ScreenBg)
                 .padding(paddingValues)
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = 12.scaled())
+                .verticalScroll(rememberScrollState())
         ) {
             // 账号与安全
             SettingsGroup {
@@ -135,7 +167,7 @@ fun ProfileScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.scaled()))
 
             // 播放与下载
             SettingsGroup {
@@ -152,7 +184,26 @@ fun ProfileScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.scaled()))
+
+            // 调试
+            SettingsGroup {
+                SwitchRow(
+                    icon = Icons.Default.BugReport,
+                    title = "调试模式",
+                    subtitle = "启用日志记录",
+                    checked = debugEnabled,
+                    onCheckedChange = { settingsViewModel.setDebugEnabled(it) }
+                )
+                Divider()
+                SettingsItemRow(
+                    icon = Icons.Default.Info,
+                    title = "查看日志",
+                    onClick = { showDebugLog = true }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.scaled()))
 
             // 关于
             SettingsGroup {
@@ -163,21 +214,21 @@ fun ProfileScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.scaled()))
 
             // 底部退出按钮
             if (isLoggedIn) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                        .background(GroupBg)
+                        .clip(RoundedCornerShape(12.scaled()))
+                        .background(Color(0xFFE6E8EE))
                         .clickable { showLogoutDialog = true }
-                        .padding(vertical = 18.dp),
+                        .padding(vertical = 18.scaled()),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "退出登录/关闭",
+                        text = "退出登录",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF1F1F1F)
                     )
@@ -219,7 +270,7 @@ fun ProfileScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
+                                    .padding(vertical = 8.scaled())
                                     .clickable {
                                         settingsViewModel.setAudioQuality(id)
                                         showQualityDialog = false
@@ -233,7 +284,7 @@ fun ProfileScreen(
                                         showQualityDialog = false
                                     }
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(8.scaled()))
                                 Text(
                                     text = name,
                                     style = MaterialTheme.typography.bodyLarge
@@ -249,15 +300,21 @@ fun ProfileScreen(
                 }
             )
         }
+
+        if (showDebugLog) {
+            DebugLogDialog(
+                onDismiss = { showDebugLog = false }
+            )
+        }
     }
 }
 
 @Composable
-private fun SettingsGroup(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    androidx.compose.foundation.layout.Column(
+private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.scaled()))
             .background(GroupBg)
     ) {
         content()
@@ -274,16 +331,16 @@ private fun SettingsItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color(0xFF1F1F1F),
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(22.scaled())
         )
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(14.scaled()))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
@@ -294,7 +351,48 @@ private fun SettingsItemRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFFBFBFBF),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.scaled())
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFF1F1F1F),
+            modifier = Modifier.size(22.scaled())
+        )
+        Spacer(modifier = Modifier.width(14.scaled()))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFF1F1F1F)
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF8A8F99)
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
         )
     }
 }
@@ -309,7 +407,7 @@ private fun AccountRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isLoggedIn && userInfo?.face?.isNotEmpty() == true) {
@@ -317,13 +415,13 @@ private fun AccountRow(
                 model = userInfo.face,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(40.scaled())
                     .clip(CircleShape)
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(40.scaled())
                     .clip(CircleShape)
                     .background(Color(0xFFE6E8EE)),
                 contentAlignment = Alignment.Center
@@ -332,11 +430,11 @@ private fun AccountRow(
                     imageVector = Icons.Default.Person,
                     contentDescription = null,
                     tint = Color(0xFF9097A3),
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(22.scaled())
                 )
             }
         }
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(14.scaled()))
         Text(
             text = if (isLoggedIn) (userInfo?.name ?: "已登录") else "账号与安全",
             style = MaterialTheme.typography.bodyLarge,
@@ -347,7 +445,7 @@ private fun AccountRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFFBFBFBF),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.scaled())
         )
     }
 }
@@ -359,5 +457,54 @@ private fun Divider() {
             .fillMaxWidth()
             .height(0.5.dp)
             .background(Color(0xFFEEEEF2))
+    )
+}
+
+@Composable
+private fun DebugLogDialog(onDismiss: () -> Unit) {
+    val logs by com.biliaudio.util.DebugLogger.logs.collectAsState()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("调试日志 (${logs.size})")
+        },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp)
+            ) {
+                if (logs.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "暂无日志（请先启用调试模式）",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF8A8F99)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(logs) { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF444444)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
     )
 }
