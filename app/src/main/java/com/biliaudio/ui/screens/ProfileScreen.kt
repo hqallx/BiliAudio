@@ -338,7 +338,7 @@ private fun PlaybackTab(
             text = "播放",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -376,7 +376,7 @@ private fun AboutTab() {
             text = "关于",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
