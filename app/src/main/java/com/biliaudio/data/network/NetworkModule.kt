@@ -57,6 +57,10 @@ object NetworkModule {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
+        // Cookie 拦截器：手动注入 Cookie 头（照搬 BBPlayer credentials:'omit' + 手动 Cookie 头）
+        // 不依赖 OkHttp loadForRequest 的返回值，完全自己管理 Cookie 注入。
+        val cookieInterceptor = CookieInterceptor(provideCookieJar())
+
         val headerInterceptor = Interceptor { chain ->
             val originalRequest = chain.request()
             val request = originalRequest.newBuilder()
@@ -69,6 +73,7 @@ object NetworkModule {
 
         return OkHttpClient.Builder()
             .cookieJar(provideCookieJar())
+            .addInterceptor(cookieInterceptor)
             .addInterceptor(headerInterceptor)
             .addInterceptor(WbiSignInterceptor(provideWbiSigner()))
             .addInterceptor(loggingInterceptor)
