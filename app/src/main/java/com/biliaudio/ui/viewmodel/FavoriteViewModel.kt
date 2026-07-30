@@ -201,15 +201,25 @@ class FavoriteViewModel @Inject constructor(
     }
 
     fun refresh() {
-        try {
-            val mid = authRepository.getCurrentUserId()
-            if (mid != null) {
-                loadFolders(mid)
-                loadSeasons(mid)
+        viewModelScope.launch {
+            try {
+                var mid = authRepository.getCurrentUserId()
+                // Cookie 中暂时拿不到 mid 时，回退到 DataStore 持久化的 user_id
+                if (mid == null || mid <= 0) {
+                    val idStr = preferencesManager.userId.first()
+                    if (idStr.isNotEmpty()) {
+                        mid = idStr.toLongOrNull()
+                    }
+                }
+                com.biliaudio.util.DebugLogger.d("FavVM", "refresh: mid=$mid, isLoggedIn=${authRepository.isLoggedIn()}")
+                if (mid != null && mid > 0) {
+                    loadFolders(mid)
+                    loadSeasons(mid)
+                }
+                loadHistory()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            loadHistory()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 

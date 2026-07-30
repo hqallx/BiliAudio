@@ -100,4 +100,23 @@ class PreferencesManager(private val context: Context) {
     suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
     }
+
+    /**
+     * 一次性同步读取已持久化的用户信息（挂起）。
+     * 用于进程重启后立即恢复头像/名称，避免等待 nav 接口。
+     */
+    suspend fun getCachedUserInfo(): CachedUserInfo {
+        val id = userId.first()
+        val name = userName.first()
+        val avatar = userAvatar.first()
+        return CachedUserInfo(id, name, avatar)
+    }
+}
+
+data class CachedUserInfo(
+    val id: String,
+    val name: String,
+    val avatar: String
+) {
+    val hasCached: Boolean get() = name.isNotEmpty()
 }

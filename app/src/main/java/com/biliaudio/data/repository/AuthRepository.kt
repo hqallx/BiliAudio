@@ -144,7 +144,11 @@ class AuthRepository @Inject constructor(
     }
 
     fun getCurrentUserId(): Long? {
-        return CookieHelper.extractUserId(cookieJar.getAllCookies())
+        // 优先直接从磁盘 BiliCookieStore 读取（同步、权威），
+        // 避免 getAllCookies() 构造 Cookie 对象的额外开销与时序问题。
+        val mid = cookieJar.store.getUserId()
+        DebugLogger.d("AuthRepo", "getCurrentUserId: mid=$mid, cookieNames=${cookieJar.store.getCookieMap().keys}")
+        return mid
     }
 
     /** 调试用：返回当前内存中 Cookie 的简要快照（name=value 列表）。 */

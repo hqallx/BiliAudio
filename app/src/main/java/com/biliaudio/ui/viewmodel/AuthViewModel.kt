@@ -408,24 +408,29 @@ class AuthViewModel @Inject constructor(
     // ============ 通用 ============
 
     /**
-     * 从持久化 Cookie 中恢复基本用户信息（mid）。
-     * 仅在 nav 接口暂时不可达时作为兜底，确保「我的」页面不闪烁「未登录」。
-     * 注意：此兜底信息会在 nav 成功后被真实数据覆盖。
+     * 从持久化的 Cookie + DataStore 恢复用户信息（mid/name/avatar）。
+     * 进程重启后立即显示缓存的头像和名称，nav 成功后被真实数据覆盖。
+     * 照搬 BBPlayer 的 initialData 策略：用本地缓存做初始数据，避免闪烁。
      */
     private fun restoreBasicUserInfo() {
-        try {
-            val mid = authRepository.getCurrentUserId()
-            if (mid != null && mid > 0 && _userInfo.value == null) {
-                _userInfo.value = UserInfo(
-                    mid = mid,
-                    name = "已登录用户",
-                    face = "",
-                    sign = "",
-                    level = 0
-                )
+        viewModelScope.launch {
+            try {
+                val mid = authRepository.getCurrentUserId()
+                val savedName = preferencesManager.userName.first()
+                val savedAvatar = preferencesManager.userAvatar.first()
+                if (_userInfo.value == null) {
+                    _userInfo.value = UserInfo(
+                        mid = mid ?: 0L,
+                        name = savedName.ifEmpty { "已登录用户" },
+                        face = savedAvatar,
+                        sign = "",
+                        level = 0
+                    )
+                    DebugLogger.d("AuthVM", "restoreBasicUserInfo: mid=$mid, name=$savedName, avatar=${savedAvatar.take(40)}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
