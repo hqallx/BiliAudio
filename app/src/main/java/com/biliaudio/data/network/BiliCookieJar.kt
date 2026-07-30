@@ -75,13 +75,16 @@ class BiliCookieJar(context: Context) : CookieJar {
         cookieStore.clear()
         cookieStore["bilibili.com"] = cookies.toMutableList()
         ensureBuvid3()
-        persist()
+        persist(sync = true)
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
     /**
      * 合并 Cookie（不清除已有的，同 name 覆盖）。
      * 用于从二维码登录 URL 或 WebView CookieManager 同步 Cookie 到 OkHttp CookieJar。
+     *
+     * 登录成功是关键路径，使用同步落盘（commit），避免应用被强杀时
+     * apply() 异步写盘未完成导致 Cookie 丢失、下次启动显示未登录。
      */
     @Synchronized
     fun mergeCookies(cookies: List<Cookie>) {
@@ -90,7 +93,7 @@ class BiliCookieJar(context: Context) : CookieJar {
             store.removeAll { it.name == incoming.name }
             store.add(incoming)
         }
-        persist()
+        persist(sync = true)
         onCookiesUpdated?.invoke(getAllCookies())
     }
 
@@ -146,13 +149,17 @@ class BiliCookieJar(context: Context) : CookieJar {
     }
 
     /**
-     * 将 Cookie 持久化到 SharedPreferences（同步操作，安全在任何线程调用）。
+     * 将 Cookie 持久化到 SharedPreferences。
      * 注意：buvid3 单独存储在 "buvid3" key，不写入 "cookies"，避免 clearCookies 时丢失。
+     *
+     * @param sync true 时用 commit() 同步写盘（登录等关键路径，防强杀丢失）；
+     *             false 时用 apply() 异步写盘（高频的 saveFromResponse，保性能）。
      */
-    private fun persist() {
+    private fun persist(sync: Boolean = false) {
         val cookieString = CookieHelper.cookiesToString(
             getAllCookies().filter { it.name != "buvid3" }
         )
-        prefs.edit().putString("cookies", cookieString).apply()
+        val editor = prefs.edit().putString("cookies", cookieString)
+        if (sync) editor.commit() else editor.apply()
     }
 }

@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -167,7 +167,7 @@ fun AppRoot(
     val items = listOf(
         BottomNavItem("library", "库", Icons.Default.LibraryBooks),
         BottomNavItem("playlist", "播放列表", Icons.Default.QueueMusic),
-        BottomNavItem("profile", "我的", Icons.Default.Person)
+        BottomNavItem("profile", "设置", Icons.Default.Settings)
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()

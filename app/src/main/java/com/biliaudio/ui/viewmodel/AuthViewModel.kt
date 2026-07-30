@@ -437,25 +437,36 @@ class AuthViewModel @Inject constructor(
                     }
                     is NavResult.NotLoggedIn -> {
                         // 接口明确返回未登录（code=-101 或 isLogin=false）。
-                        // 冷启动时可能因瞬时网络抖动或服务端缓存导致误判，
-                        // 延迟 2 秒后重试一次，仍 NotLoggedIn 才真正登出。
+                        // 划掉后台/冷启动恢复时 nav 接口可能瞬时返回 -101
+                        // （Cookie 时序、服务端缓存、网络抖动等），若直接 logout
+                        // 会清掉仍有效的 Cookie，导致用户被误踢出登录。
+                        // 改为：递增延迟重试 3 次；仍失败则保留 Cookie 与登录态，
+                        // 仅提示用户。Cookie 真失效时用户操作会收到 -101，
+                        // 可由用户主动「退出登录」清理。
                         if (_isLoggedIn.value) {
-                            delay(2000)
-                            when (val retry = authRepository.getUserInfo()) {
+                            var retryResult: NavResult = NavResult.NotLoggedIn
+                            for (attempt in 1..3) {
+                                delay(1500L * attempt)
+                                retryResult = authRepository.getUserInfo()
+                                if (retryResult is NavResult.LoggedIn) break
+                            }
+                            when (retryResult) {
                                 is NavResult.LoggedIn -> {
-                                    _userInfo.value = retry.userInfo
+                                    _userInfo.value = retryResult.userInfo
                                     preferencesManager.saveUserInfo(
-                                        id = retry.userInfo.mid.toString(),
-                                        name = retry.userInfo.name,
-                                        avatar = retry.userInfo.face
+                                        id = retryResult.userInfo.mid.toString(),
+                                        name = retryResult.userInfo.name,
+                                        avatar = retryResult.userInfo.face
                                     )
                                 }
                                 is NavResult.NotLoggedIn -> {
-                                    _toast.value = "登录已失效，请重新登录"
-                                    logout()
+                                    // 不 logout 不清 Cookie：保留登录态，提示用户网络可能异常。
+                                    _toast.value = "登录状态校验失败，请检查网络后稍后重试"
+                                    if (_userInfo.value == null) {
+                                        restoreBasicUserInfo()
+                                    }
                                 }
                                 is NavResult.Failed -> {
-                                    // 重试失败：Cookie 可能仍有效，不登出
                                     if (_userInfo.value == null) {
                                         restoreBasicUserInfo()
                                     }
