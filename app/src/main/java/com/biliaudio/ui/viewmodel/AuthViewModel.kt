@@ -447,39 +447,19 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                     is NavResult.NotLoggedIn -> {
-                        DebugLogger.w("AuthVM", "nav 返回 NotLoggedIn(-101)，重试 1 次确认")
-                        // 参考 BBPlayer：接口明确返回 -101 视为 Cookie 失效。
-                        // 但 -101 可能瞬时（服务端缓存/网络抖动），重试 1 次确认：
-                        // 仍 -101 则清 Cookie 并退出登录；成功则继续。
-                        if (_isLoggedIn.value) {
-                            delay(1500L)
-                            val retryResult = authRepository.getUserInfo()
-                            DebugLogger.d("AuthVM", "nav 重试结果: $retryResult")
-                            when (retryResult) {
-                                is NavResult.LoggedIn -> {
-                                    _userInfo.value = retryResult.userInfo
-                                    preferencesManager.saveUserInfo(
-                                        id = retryResult.userInfo.mid.toString(),
-                                        name = retryResult.userInfo.name,
-                                        avatar = retryResult.userInfo.face
-                                    )
-                                }
-                                is NavResult.NotLoggedIn -> {
-                                    // 确认 Cookie 真正失效：清 Cookie，置未登录。
-                                    // AppRoot 的 LaunchedEffect 会据此跳转到登录页。
-                                    DebugLogger.w("AuthVM", "重试仍 -101，Cookie 失效，执行登出")
-                                    _toast.value = "登录已失效，请重新登录"
-                                    authRepository.clearCookies()
-                                    _isLoggedIn.value = false
-                                    _userInfo.value = null
-                                }
-                                is NavResult.Failed -> {
-                                    // 重试遇到网络错误：Cookie 可能仍有效，不清除。
-                                    if (_userInfo.value == null) {
-                                        restoreBasicUserInfo()
-                                    }
-                                }
-                            }
+                        // 完全照搬 BBPlayer：nav 返回 -101 时**不清除 Cookie、不退出登录**。
+                        //
+                        // BBPlayer 对 nav 接口甚至不检查 code（直接返回 data），
+                        // 登录态完全由磁盘 Cookie 决定（hasLoginCookies）。
+                        // nav -101 可能是服务端瞬时风控/缓存/网络抖动，Cookie 仍有效。
+                        // 只有用户主动「退出登录」时才清除 Cookie。
+                        //
+                        // 这是「划掉后台后退出登录」的根因修复：
+                        // 之前 nav -101 会 clearCookies() + _isLoggedIn=false，
+                        // 导致进程重启后 nav 接口偶发 -101 就把有效 Cookie 清掉。
+                        DebugLogger.w("AuthVM", "nav 返回 -101，保留 Cookie 与登录态（照搬 BBPlayer）")
+                        if (_userInfo.value == null) {
+                            restoreBasicUserInfo()
                         }
                     }
                     is NavResult.Failed -> {
