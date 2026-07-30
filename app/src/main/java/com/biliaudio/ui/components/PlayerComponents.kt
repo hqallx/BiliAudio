@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -178,10 +179,32 @@ fun PlayerScreen(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBg)
+    ) {
+        // 背景：视频封面模糊填充（铺满整屏）
+        if (!track?.coverUrl.isNullOrEmpty()) {
+            AsyncImage(
+                model = track?.coverUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(80.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // 半透明黑色遮罩：让前景文字清晰可读
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x99000000))
+            )
+        }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
             .statusBarsPadding()
             .padding(horizontal = 24.dp),
     ) {
@@ -508,6 +531,7 @@ fun PlayerScreen(
             }
         }
     }
+    } // Box end
 
     // ===== 播放列表 BottomSheet =====
     if (showPlaylistSheet) {
