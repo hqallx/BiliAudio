@@ -31,6 +31,10 @@ sealed class Result<out T> {
 
 inline fun <T> resultOf(block: () -> T): Result<T> = try {
     Result.Success(block())
+} catch (e: kotlinx.coroutines.CancellationException) {
+    // 结构化并发：协程被取消时必须重新抛出，不能吞成 Result.Error，
+    // 否则 viewModelScope 取消后仍会执行 catch 块更新 StateFlow，浪费资源。
+    throw e
 } catch (e: Exception) {
     Result.Error(e, e.message ?: "Unknown error")
 }

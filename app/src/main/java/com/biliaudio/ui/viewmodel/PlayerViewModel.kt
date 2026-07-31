@@ -38,8 +38,15 @@ class PlayerViewModel @Inject constructor(
     fun startProgressUpdate() {
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
+            var saveCounter = 0
             while (true) {
                 playbackManager.updateProgress()
+                // 每 ~5 秒持久化一次播放位置（PROGRESS_UPDATE_INTERVAL_MS=500ms × 10）
+                // 避免每 500ms 写盘，同时保证进程被杀时最多丢失 5 秒进度
+                if (++saveCounter >= 10) {
+                    saveCounter = 0
+                    playbackManager.savePlaybackState()
+                }
                 delay(BiliConstants.PROGRESS_UPDATE_INTERVAL_MS)
             }
         }

@@ -9,6 +9,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.biliaudio.data.model.Track
+import com.biliaudio.data.preferences.PreferencesManager
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -18,13 +19,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class PlaybackManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val preferencesManager: PreferencesManager
 ) {
 
     private var mediaController: MediaController? = null
@@ -142,6 +145,9 @@ class PlaybackManager @Inject constructor(
                     RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
                     RepeatMode.ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
                 }
+                // 恢复上次播放状态（列表+位置），不自动播放。
+                // 用 serviceScope 避免阻塞 directExecutor 线程。
+                serviceScope.launch { restorePlaybackState() }
             } catch (e: Exception) {
                 // MediaController 连接失败不应导致应用崩溃
                 e.printStackTrace()
@@ -192,16 +198,19 @@ class PlaybackManager @Inject constructor(
      * 会自动处理，此处无需区分。这使得「播放全部」长列表瞬时完成。
      */
     fun setPlaylist(tracks: List<Track>, startIndex: Int = 0) {
+        // 防御：startIndex 越界会导致 add(index, e) 抛 IndexOutOfBoundsException
+        val safeIndex = startIndex.coerceIn(0, tracks.size)
         _playlist.value = tracks
-        _currentIndex.value = startIndex
-        _currentTrack.value = tracks.getOrNull(startIndex)
+        _currentIndex.value = safeIndex
+        _currentTrack.value = tracks.getOrNull(safeIndex)
         _playbackError.value = null
 
         val mediaItems = tracks.map { it.toMediaItem() }
 
-        mediaController?.setMediaItems(mediaItems, startIndex, 0L)
+        mediaController?.setMediaItems(mediaItems, safeIndex, 0L)
         mediaController?.prepare()
         mediaController?.play()
+        savePlaybackState()
     }
 
     fun addToPlaylist(track: Track) {
@@ -210,6 +219,7 @@ class PlaybackManager @Inject constructor(
         _playlist.value = currentList
 
         mediaController?.addMediaItem(track.toMediaItem())
+        savePlaybackState()
     }
 
     /**
@@ -218,10 +228,12 @@ class PlaybackManager @Inject constructor(
      */
     fun addNext(track: Track) {
         val currentList = _playlist.value.toMutableList()
-        val insertPos = (_currentIndex.value + 1).coerceAtLeast(currentList.size)
+        // coerceIn 防御：_currentIndex 可能因上游越界而 > size-1
+        val insertPos = (_currentIndex.value + 1).coerceIn(0, currentList.size)
         currentList.add(insertPos, track)
         _playlist.value = currentList
         mediaController?.addMediaItem(insertPos, track.toMediaItem())
+        savePlaybackState()
     }
 
     fun removeFromPlaylist(index: Int) {
@@ -230,6 +242,7 @@ class PlaybackManager @Inject constructor(
             currentList.removeAt(index)
             _playlist.value = currentList
             mediaController?.removeMediaItem(index)
+            savePlaybackState()
         }
     }
 
@@ -246,6 +259,8 @@ class PlaybackManager @Inject constructor(
         _isPlaying.value = false
         _isLoading.value = false
         mediaController?.clearMediaItems()
+        // 清空列表后同步清除持久化，避免重启后恢复一个已被用户清空的列表
+        serviceScope.launch { preferencesManager.clearPlaybackState() }
     }
 
     fun playAt(index: Int) {
@@ -322,6 +337,62 @@ class PlaybackManager @Inject constructor(
         mediaController?.let {
             _currentPosition.value = it.currentPosition
             _duration.value = it.duration.coerceAtLeast(0L)
+        }
+    }
+
+    /**
+     * 持久化当前播放列表、曲目索引与播放位置到 DataStore。
+     * 在 setPlaylist/addToPlaylist/addNext/removeFromPlaylist 及进度更新时调用，
+     * 保证进程被杀/划掉后台后可恢复。
+     * 仅在 playlist 非空时保存，避免空列表覆盖已有状态（清空走 [clearPlaylist]）。
+     */
+    fun savePlaybackState() {
+        val tracks = _playlist.value
+        if (tracks.isEmpty()) return
+        val snapshot = PlaybackSnapshot(
+            playlist = tracks,
+            currentIndex = _currentIndex.value,
+            // 优先用 controller 的实时位置，更精确
+            position = mediaController?.currentPosition ?: _currentPosition.value
+        )
+        serviceScope.launch {
+            try {
+                preferencesManager.savePlaybackState(
+                    playlist = snapshot.playlist,
+                    index = snapshot.currentIndex,
+                    position = snapshot.position
+                )
+            } catch (e: Exception) {
+                // 持久化失败不应影响播放
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * 从 DataStore 恢复上次播放状态。
+     * 应在 MediaController 连接成功后调用（见 [connectController] 回调），
+     * 恢复后不自动播放（避免重启后突然出声），仅恢复列表与位置，由用户点播放。
+     */
+    suspend fun restorePlaybackState() {
+        try {
+            val tracks = preferencesManager.savedPlaylist.first()
+            val index = preferencesManager.savedIndex.first()
+            val position = preferencesManager.savedPosition.first()
+            if (tracks.isEmpty()) return
+            val safeIndex = index.coerceIn(0, tracks.lastIndex)
+            _playlist.value = tracks
+            _currentIndex.value = safeIndex
+            _currentTrack.value = tracks.getOrNull(safeIndex)
+            _currentPosition.value = position
+            val mediaItems = tracks.map { it.toMediaItem() }
+            // 恢复时不 play，仅 prepare 到指定位置，等待用户主动播放
+            mediaController?.setMediaItems(mediaItems, safeIndex, position)
+            mediaController?.prepare()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            e.printStackTrace()
         }
     }
 

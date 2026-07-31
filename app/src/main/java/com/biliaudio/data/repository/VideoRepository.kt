@@ -244,8 +244,14 @@ class VideoRepository @Inject constructor(
     private fun encode(s: String): String =
         URLEncoder.encode(s, "UTF-8")
 
-    fun clearCache() {
-        cache.clear()
+    /**
+     * 清空音频地址缓存。
+     * 必须获取 [cacheMutex]：cache 是非线程安全的 LinkedHashMap，
+     * resolveAudioUrl 在 ExoPlayer 加载线程读写，本方法在 Main 线程调用，
+     * 不加锁会触发 ConcurrentModificationException。
+     */
+    suspend fun clearCache() {
+        cacheMutex.withLock { cache.clear() }
     }
 
     private data class CacheEntry(

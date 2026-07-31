@@ -103,7 +103,9 @@ data class FavoriteFolder(
 
 @Serializable
 data class FavoriteListResponse(
-    val list: List<FavoriteFolder>,
+    // 必须有默认值：B 站空收藏夹返回 "list": null，
+    // 无默认值时 coerceInputValues 不生效 → JsonDecodingException 崩溃
+    val list: List<FavoriteFolder> = emptyList(),
     val count: Int = 0
 )
 
@@ -131,7 +133,9 @@ data class Upper(
 
 @Serializable
 data class FavoriteResourceResponse(
-    val medias: List<VideoItem>,
+    // 必须有默认值：B 站空收藏夹返回 "medias": null，
+    // 无默认值时 coerceInputValues 不生效 → JsonDecodingException 崩溃
+    val medias: List<VideoItem> = emptyList(),
     val has_more: Boolean = false,
     val total: Int = 0
 )
