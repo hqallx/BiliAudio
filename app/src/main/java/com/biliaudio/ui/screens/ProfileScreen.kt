@@ -497,7 +497,7 @@ private fun DebugLogDialog(onDismiss: () -> Unit) {
                         enabled = logs.isNotEmpty()
                     ) {
                         Icon(
-                            imageVector = Icons.filled.ContentCopy,
+                            imageVector = Icons.Default.ContentCopy,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
