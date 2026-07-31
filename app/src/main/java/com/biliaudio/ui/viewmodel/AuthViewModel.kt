@@ -89,14 +89,17 @@ class AuthViewModel @Inject constructor(
             // 即使 Cookie 有效也会让用户误以为「划掉后台后登录失效」。
             val hasLogin = authRepository.isLoggedIn()
             _isLoggedIn.value = hasLogin
-            DebugLogger.d("AuthVM", "init sync: isLoggedIn=$hasLogin, cookies=${authRepository.cookieSnapshot().take(80)}")
+            DebugLogger.d("AuthVM", "init sync: isLoggedIn=$hasLogin")
 
+            // 关键：restoreBasicUserInfo/loadUserInfo 必须执行，否则头像/名称为空。
+            // 之前 cookieSnapshot() 可能抛异常导致后续代码被跳过，
+            // 现在把日志单独 try-catch，不阻塞主流程。
             viewModelScope.launch {
                 try {
-                    DebugLogger.d("AuthVM", "init async: isLoggedIn=${_isLoggedIn.value}")
+                    DebugLogger.d("AuthVM", "init async: isLoggedIn=${_isLoggedIn.value}, cookies=${try { authRepository.cookieSnapshot().take(80) } catch (_: Exception) { "err" }}")
                     if (hasLogin) {
-                        // 从持久化的 Cookie 中恢复基本用户信息（mid），
-                        // 即使 nav 接口暂时失败也能在「我的」页面显示已登录
+                        // 从持久化的 Cookie + DataStore 恢复用户信息（mid/name/avatar），
+                        // 即使 myinfo 接口暂时失败也能在设置页显示缓存的头像和名称。
                         restoreBasicUserInfo()
                         loadUserInfo()
                     }
@@ -120,6 +123,7 @@ class AuthViewModel @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            DebugLogger.e("AuthVM", "init 异常", e)
             e.printStackTrace()
         }
     }
