@@ -99,7 +99,8 @@ class BiliCookieStore(context: Context) {
     /** 清除所有登录 Cookie（退出登录）。保留 buvid3。 */
     @Synchronized
     fun clearLoginCookies() {
-        prefs.edit().remove(KEY_COOKIES).commit()
+        // 退出登录无强一致需求，用 apply 异步落盘避免阻塞主线程
+        prefs.edit().remove(KEY_COOKIES).apply()
         ensureBuvid3()
         DebugLogger.d("CookieStore", "clearLoginCookies: 已清除登录 cookie")
     }
@@ -114,7 +115,8 @@ class BiliCookieStore(context: Context) {
 
         val buvid3 = prefs.getString(KEY_BUVID3, null) ?: run {
             val generated = UUID.randomUUID().toString().uppercase()
-            prefs.edit().putString(KEY_BUVID3, generated).commit()
+            // buvid3 非登录态关键数据，用 apply 异步落盘
+            prefs.edit().putString(KEY_BUVID3, generated).apply()
             generated
         }
 

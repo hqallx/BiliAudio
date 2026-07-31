@@ -42,16 +42,6 @@ class SettingsViewModel @Inject constructor(
         BiliConstants.AudioQuality.AAC_64K to "64K（最低）"
     )
 
-    init {
-        // 启动时根据持久化偏好同步 DebugLogger 开关状态，
-        // 保证冷启动后调试日志能立即生效（用于排查登录失效等问题）。
-        viewModelScope.launch {
-            preferencesManager.debugEnabled.collect { enabled ->
-                DebugLogger.setEnabled(enabled)
-            }
-        }
-    }
-
     /** 保存音质偏好。 */
     fun setAudioQuality(quality: Int) {
         viewModelScope.launch {

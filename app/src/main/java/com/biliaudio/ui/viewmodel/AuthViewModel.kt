@@ -489,7 +489,8 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 authRepository.clearCookies()
-                preferencesManager.clearAll()
+                // 仅清登录数据，保留音质/调试开关/播放列表等用户偏好
+                preferencesManager.clearLoginData()
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

@@ -103,6 +103,20 @@ class PreferencesManager(private val context: Context) {
     }
 
     /**
+     * 仅清除登录相关数据（用户信息 + Cookie），保留用户偏好。
+     * 退出登录不应重置音质、调试开关、播放列表等非登录态设置，
+     * 否则副作用超出「退出登录」语义。
+     */
+    suspend fun clearLoginData() {
+        context.dataStore.edit {
+            it.remove(userIdKey)
+            it.remove(userNameKey)
+            it.remove(userAvatarKey)
+            it.remove(cookiesKey)
+        }
+    }
+
+    /**
      * 一次性同步读取已持久化的用户信息（挂起）。
      * 用于进程重启后立即恢复头像/名称，避免等待 nav 接口。
      */
