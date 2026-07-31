@@ -135,6 +135,9 @@ class PlaybackManager @Inject constructor(
     }
 
     fun connectController(sessionToken: SessionToken) {
+        // 幂等防御：配置变更（旋转等）重建时会再次调用 connectController，
+        // 已存在 controller 则直接复用，避免泄漏旧 MediaController 实例。
+        if (mediaController != null) return
         val future = MediaController.Builder(context, sessionToken).buildAsync()
         future.addListener({
             try {

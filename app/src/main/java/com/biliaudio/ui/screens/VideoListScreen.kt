@@ -219,23 +219,26 @@ fun VideoListScreen(
                 }
             }
         ) {
-            videos.forEach { video ->
-                VideoCard(
-                    title = video.title,
-                    artist = video.upper?.name ?: "Unknown",
-                    coverUrl = video.cover,
-                    duration = formatDurationMinSec(video.duration),
-                    onClick = {
-                        // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
-                        val track = favoriteViewModel.videoToLazyTrack(video)
-                        playerViewModel.addToPlaylist(track)
-                        playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
-                    },
-                    onAddNext = {
-                        // 下一首播放：插队到当前曲目之后
-                        playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
-                    }
-                )
+            // 用 LazyColumn 而非 forEach，避免长搜索结果一次性组合造成卡顿/OOM
+            LazyColumn {
+                items(videos) { video ->
+                    VideoCard(
+                        title = video.title,
+                        artist = video.upper?.name ?: "Unknown",
+                        coverUrl = video.cover,
+                        duration = formatDurationMinSec(video.duration),
+                        onClick = {
+                            // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                            val track = favoriteViewModel.videoToLazyTrack(video)
+                            playerViewModel.addToPlaylist(track)
+                            playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
+                        },
+                        onAddNext = {
+                            // 下一首播放：插队到当前曲目之后
+                            playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
+                        }
+                    )
+                }
             }
         }
     }

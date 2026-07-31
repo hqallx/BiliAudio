@@ -213,7 +213,7 @@ fun ProfileScreen(
                 SettingsItemRow(
                     icon = Icons.Default.Info,
                     title = "关于",
-                    onClick = { /* 关于页待实现 */ }
+                    onClick = { settingsViewModel.toast("功能开发中") }
                 )
             }
 

@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -358,7 +359,10 @@ fun PlayerScreen(
             }
             Spacer(modifier = Modifier.width(8.dp))
             // 更多
-            IconButton(onClick = { /* 更多菜单待实现 */ }) {
+            val moreContext = LocalContext.current
+            IconButton(onClick = {
+                android.widget.Toast.makeText(moreContext, "功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+            }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "更多",
@@ -434,8 +438,9 @@ fun PlayerScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = PlayerTextMuted
             )
+            // 显示当前倍速（动态，非硬编码），倍速=1时显示"标准"
             Text(
-                text = "极高音质",
+                text = if (playbackSpeed == 1.0f) "标准" else "${playbackSpeed}x",
                 style = MaterialTheme.typography.bodySmall,
                 color = PlayerTextMuted
             )
