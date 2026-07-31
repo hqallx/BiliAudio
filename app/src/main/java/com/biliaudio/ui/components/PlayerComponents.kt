@@ -71,7 +71,7 @@ private val DarkSurface = Color(0xFF3D3D3D)
 private val PlayerTextPrimary = Color(0xFFFFFFFF)
 private val PlayerTextSecondary = Color(0xFFAAAAAA)
 private val PlayerTextMuted = Color(0xFF888888)
-private val PlayerAccent = AppColors.AccentPink   // B站粉（点赞高亮，与主题统一）
+private val PlayerAccent: Color @Composable get() = AppColors.AccentPink   // B站粉（点赞高亮，与主题统一）
 private val PlayerTrackBg = Color(0xFF555555)     // 未播放灰条
 private val PlayerTrackPlayed = Color(0xFFFFFFFF) // 已播放白条
 

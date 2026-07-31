@@ -29,13 +29,16 @@ private val LightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFE7DEFF),
     onTertiaryContainer = Color(0xFF25005D),
-    background = Color(0xFFFFFBFF),
-    onBackground = Color(0xFF201A1A),
-    surface = Color(0xFFFFFBFF),
-    onSurface = Color(0xFF201A1A),
-    surfaceVariant = Color(0xFFF2DDE2),
-    onSurfaceVariant = Color(0xFF514347),
-    outline = Color(0xFF837377),
+    // 统一页面背景为浅蓝灰，与 AppColors.ScreenBg 一致，避免页面间色差跳变
+    background = Color(0xFFF1F3F8),
+    onBackground = Color(0xFF1F1F1F),
+    surface = Color(0xFFF1F3F8),
+    onSurface = Color(0xFF1F1F1F),
+    surfaceVariant = Color(0xFFE6E8EE),
+    onSurfaceVariant = Color(0xFF8A8F99),
+    outline = Color(0xFFBFBFBF),
+    // M3 v1.2 surface tonal 角色，供 MiniPlayer 等组件使用
+    surfaceContainerHighest = Color(0xFFE6E8EE),
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -58,6 +61,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = Color(0xFF514347),
     onSurfaceVariant = Color(0xFFD5C2C6),
     outline = Color(0xFF9E8C90),
+    surfaceContainerHighest = Color(0xFF3D3D3D),
 )
 
 @Composable
@@ -96,30 +100,25 @@ fun BiliAudioTheme(
 }
 
 /**
- * 应用语义化颜色常量（浅色模式）。
+ * 应用语义化颜色的 Composable 访问器。
  *
- * 集中定义各页面共用的文字、分割线、背景等颜色，避免硬编码散落各处导致风格不统一。
- * 主题点缀色取自 B 站品牌色：粉 [AccentPink] + 蓝 [AccentBlue]。
+ * 统一各页面共用的文字、分割线、背景等颜色，避免硬编码散落各处。
+ * 所有取值映射到 [MaterialTheme.colorScheme]，因此**自动适配暗色模式**——
+ * 之前用固定 Color 常量导致 ProfileScreen 在暗色模式下仍是浅底深字。
+ *
+ * 主题点缀色取自 B 站品牌色：粉（primary）+ 蓝（secondary）。
  */
 object AppColors {
-    /** 页面背景（浅蓝灰，与截图风格一致） */
-    val ScreenBg = Color(0xFFF1F3F8)
-    /** 主文字 */
-    val TextPrimary = Color(0xFF1F1F1F)
-    /** 次要文字（副标题、提示） */
-    val TextSecondary = Color(0xFF8A8F99)
-    /** 弱化元素（chevron 箭头等） */
-    val TextMuted = Color(0xFFBFBFBF)
-    /** 弱化图标（占位头像图标） */
-    val IconMuted = Color(0xFF9097A3)
-    /** 分割线 */
-    val Divider = Color(0xFFEEEEF2)
-    /** 卡片/按钮浅背景 */
-    val CardBg = Color(0xFFE6E8EE)
+    val ScreenBg: Color @Composable get() = MaterialTheme.colorScheme.background
+    val TextPrimary: Color @Composable get() = MaterialTheme.colorScheme.onBackground
+    val TextSecondary: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    val TextMuted: Color @Composable get() = MaterialTheme.colorScheme.outline
+    val IconMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    val Divider: Color @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val CardBg: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHighest
     /** B 站粉（主题点缀色，设置项图标） */
-    val AccentPink = Color(0xFFFB7299)
+    val AccentPink: Color @Composable get() = MaterialTheme.colorScheme.primary
     /** B 站蓝（主题点缀色） */
-    val AccentBlue = Color(0xFF00AEEC)
-    /** 调试日志正文 */
-    val LogText = Color(0xFF444444)
+    val AccentBlue: Color @Composable get() = MaterialTheme.colorScheme.secondary
+    val LogText: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 }

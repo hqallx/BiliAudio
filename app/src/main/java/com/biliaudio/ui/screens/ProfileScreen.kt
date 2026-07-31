@@ -68,8 +68,6 @@ import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.theme.AppColors
 import com.biliaudio.ui.viewmodel.SettingsViewModel
 
-/** 浅蓝灰底色，与截图风格一致 */
-private val ScreenBg = AppColors.ScreenBg
 /** 文字底色与页面背景一致，避免出现白色底 */
 private val GroupBg = Color.Transparent
 
@@ -120,7 +118,7 @@ fun ProfileScreen(
             val originalColor = window.statusBarColor
             val controller = WindowCompat.getInsetsController(window, view)
             val originalLight = controller.isAppearanceLightStatusBars
-            window.statusBarColor = ScreenBg.toArgb()
+            window.statusBarColor = AppColors.ScreenBg.toArgb()
             // 浅色背景配深色状态栏图标
             controller.isAppearanceLightStatusBars = true
             onDispose {
@@ -131,12 +129,12 @@ fun ProfileScreen(
     }
 
     Scaffold(
-        containerColor = ScreenBg,
+        containerColor = AppColors.ScreenBg,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ScreenBg
+                    containerColor = AppColors.ScreenBg
                 ),
                 title = {
                     Box(
@@ -156,7 +154,7 @@ fun ProfileScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(ScreenBg)
+                .background(AppColors.ScreenBg)
                 .padding(paddingValues)
                 .padding(horizontal = 12.scaled())
                 .verticalScroll(rememberScrollState())

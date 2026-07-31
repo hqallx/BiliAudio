@@ -24,7 +24,9 @@ import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.repository.VideoRepository
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.IOException
 import javax.inject.Inject
@@ -172,13 +174,24 @@ private class BiliAudioResolver(
         val cid = uri.getQueryParameter("cid")?.toLongOrNull() ?: 0L
 
         val realUrl = try {
+            // runBlocking 是 ExoPlayer Resolver 同步接口的要求，无法避免。
+            // 加 withTimeout 限制最长 20s（单次 playurl 通常 <3s），
+            // 避免网络慢时加载线程被卡死 60s（两次 OkHttp 30s readTimeout）无法预加载下一首。
             runBlocking {
-                when (val r = videoRepository.resolveAudioUrl(bvid, aid, cid)) {
-                    is Result.Success -> r.data
-                    is Result.Error -> throw IOException("解析音频地址失败: ${r.message}", r.exception)
-                    Result.Loading -> throw IOException("解析音频地址状态异常")
+                withTimeout(20_000L) {
+                    when (val r = videoRepository.resolveAudioUrl(bvid, aid, cid)) {
+                        is Result.Success -> r.data
+                        is Result.Error -> throw IOException("解析音频地址失败: ${r.message}", r.exception)
+                        Result.Loading -> throw IOException("解析音频地址状态异常")
+                    }
                 }
             }
+        } catch (e: CancellationException) {
+            // 结构化并发：TimeoutCancellationException 也是 CancellationException，重新抛出
+            throw IOException("解析音频地址超时", e)
+        } catch (e: IOException) {
+            // 已是 IOException，保留原始 cause，避免双层包裹丢失类型信息
+            throw e
         } catch (e: Exception) {
             throw IOException("解析音频地址失败: ${e.message}", e)
         }

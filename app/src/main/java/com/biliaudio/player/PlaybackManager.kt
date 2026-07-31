@@ -122,10 +122,13 @@ class PlaybackManager @Inject constructor(
     }
 
     private fun friendlyErrorMessage(error: PlaybackException): String {
-        // 懒解析失败（IOException）映射为更友好的提示
+        // 懒解析失败的消息在 cause.message 里（被 ExoPlayer 包装成 Source error）
         val cause = error.cause
+        val causeMsg = cause?.message ?: ""
         return when {
-            error.message?.contains("解析音频地址") == true -> "音频地址解析失败，请重试"
+            error.message?.contains("解析音频地址") == true ||
+                causeMsg.contains("解析音频地址") -> "音频地址解析失败，请重试"
+            causeMsg.contains("超时") -> "解析超时，请检查网络后重试"
             cause is java.io.IOException -> "网络加载失败，请检查网络后重试"
             else -> "播放失败，请重试"
         }
