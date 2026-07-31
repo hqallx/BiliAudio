@@ -3,6 +3,7 @@ package com.biliaudio
 import android.app.Application
 import android.util.Log
 import com.biliaudio.data.network.NetworkModule
+import com.biliaudio.util.DebugLogger
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -15,6 +16,12 @@ class BiliAudioApp : Application() {
             NetworkModule.init(this)
         } catch (t: Throwable) {
             Log.e("BiliAudioApp", "NetworkModule init failed", t)
+        }
+        // 恢复持久化的调试日志，确保进程被杀后日志不丢失。
+        try {
+            DebugLogger.init(this)
+        } catch (t: Throwable) {
+            Log.e("BiliAudioApp", "DebugLogger init failed", t)
         }
     }
 }

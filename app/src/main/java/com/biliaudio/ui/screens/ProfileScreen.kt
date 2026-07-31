@@ -65,10 +65,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.UserInfo
 import com.biliaudio.ui.viewmodel.AuthViewModel
+import com.biliaudio.ui.theme.AppColors
 import com.biliaudio.ui.viewmodel.SettingsViewModel
 
 /** 浅蓝灰底色，与截图风格一致 */
-private val ScreenBg = Color(0xFFF1F3F8)
+private val ScreenBg = AppColors.ScreenBg
 /** 文字底色与页面背景一致，避免出现白色底 */
 private val GroupBg = Color.Transparent
 
@@ -145,7 +146,7 @@ fun ProfileScreen(
                         Text(
                             text = "设置",
                             style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF1F1F1F)
+                            color = AppColors.TextPrimary
                         )
                     }
                 }
@@ -226,7 +227,7 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.scaled()))
-                        .background(Color(0xFFE6E8EE))
+                        .background(AppColors.CardBg)
                         .clickable { showLogoutDialog = true }
                         .padding(vertical = 18.scaled()),
                     contentAlignment = Alignment.Center
@@ -234,7 +235,7 @@ fun ProfileScreen(
                     Text(
                         text = "退出登录",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color(0xFF1F1F1F)
+                        color = AppColors.TextPrimary
                     )
                 }
             }
@@ -341,20 +342,20 @@ private fun SettingsItemRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF1F1F1F),
+            tint = AppColors.AccentPink,
             modifier = Modifier.size(22.scaled())
         )
         Spacer(modifier = Modifier.width(14.scaled()))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF1F1F1F),
+            color = AppColors.TextPrimary,
             modifier = Modifier.weight(1f)
         )
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color(0xFFBFBFBF),
+            tint = AppColors.TextMuted,
             modifier = Modifier.size(20.scaled())
         )
     }
@@ -378,7 +379,7 @@ private fun SwitchRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF1F1F1F),
+            tint = AppColors.AccentPink,
             modifier = Modifier.size(22.scaled())
         )
         Spacer(modifier = Modifier.width(14.scaled()))
@@ -386,12 +387,12 @@ private fun SwitchRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF1F1F1F)
+                color = AppColors.TextPrimary
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF8A8F99)
+                color = AppColors.TextSecondary
             )
         }
         Switch(
@@ -427,13 +428,13 @@ private fun AccountRow(
                 modifier = Modifier
                     .size(40.scaled())
                     .clip(CircleShape)
-                    .background(Color(0xFFE6E8EE)),
+                    .background(AppColors.CardBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = null,
-                    tint = Color(0xFF9097A3),
+                    tint = AppColors.IconMuted,
                     modifier = Modifier.size(22.scaled())
                 )
             }
@@ -442,13 +443,13 @@ private fun AccountRow(
         Text(
             text = if (isLoggedIn) (userInfo?.name ?: "已登录") else "账号与安全",
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF1F1F1F),
+            color = AppColors.TextPrimary,
             modifier = Modifier.weight(1f)
         )
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color(0xFFBFBFBF),
+            tint = AppColors.TextMuted,
             modifier = Modifier.size(20.scaled())
         )
     }
@@ -460,7 +461,7 @@ private fun Divider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(0.5.dp)
-            .background(Color(0xFFEEEEF2))
+            .background(AppColors.Divider)
     )
 }
 
@@ -521,7 +522,7 @@ private fun DebugLogDialog(onDismiss: () -> Unit) {
                         Text(
                             text = "暂无日志（请先启用调试模式）",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF8A8F99)
+                            color = AppColors.TextSecondary
                         )
                     }
                 } else {
@@ -535,7 +536,7 @@ private fun DebugLogDialog(onDismiss: () -> Unit) {
                                 Text(
                                     text = line,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF444444)
+                                    color = AppColors.LogText
                                 )
                             }
                         }

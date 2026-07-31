@@ -94,3 +94,32 @@ fun BiliAudioTheme(
         content = content
     )
 }
+
+/**
+ * 应用语义化颜色常量（浅色模式）。
+ *
+ * 集中定义各页面共用的文字、分割线、背景等颜色，避免硬编码散落各处导致风格不统一。
+ * 主题点缀色取自 B 站品牌色：粉 [AccentPink] + 蓝 [AccentBlue]。
+ */
+object AppColors {
+    /** 页面背景（浅蓝灰，与截图风格一致） */
+    val ScreenBg = Color(0xFFF1F3F8)
+    /** 主文字 */
+    val TextPrimary = Color(0xFF1F1F1F)
+    /** 次要文字（副标题、提示） */
+    val TextSecondary = Color(0xFF8A8F99)
+    /** 弱化元素（chevron 箭头等） */
+    val TextMuted = Color(0xFFBFBFBF)
+    /** 弱化图标（占位头像图标） */
+    val IconMuted = Color(0xFF9097A3)
+    /** 分割线 */
+    val Divider = Color(0xFFEEEEF2)
+    /** 卡片/按钮浅背景 */
+    val CardBg = Color(0xFFE6E8EE)
+    /** B 站粉（主题点缀色，设置项图标） */
+    val AccentPink = Color(0xFFFB7299)
+    /** B 站蓝（主题点缀色） */
+    val AccentBlue = Color(0xFF00AEEC)
+    /** 调试日志正文 */
+    val LogText = Color(0xFF444444)
+}

@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
+import com.biliaudio.ui.theme.AppColors
 import java.util.concurrent.TimeUnit
 
 // ====== 深色播放器色板（参考网易云/B站暗色播放器） ======
@@ -70,7 +71,7 @@ private val DarkSurface = Color(0xFF3D3D3D)
 private val PlayerTextPrimary = Color(0xFFFFFFFF)
 private val PlayerTextSecondary = Color(0xFFAAAAAA)
 private val PlayerTextMuted = Color(0xFF888888)
-private val PlayerAccent = Color(0xFFFA7299)      // B站粉（点赞高亮）
+private val PlayerAccent = AppColors.AccentPink   // B站粉（点赞高亮，与主题统一）
 private val PlayerTrackBg = Color(0xFF555555)     // 未播放灰条
 private val PlayerTrackPlayed = Color(0xFFFFFFFF) // 已播放白条
 
