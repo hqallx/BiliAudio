@@ -70,6 +70,21 @@ class PlayerViewModel @Inject constructor(
     fun removeFromPlaylist(index: Int) = playbackManager.removeFromPlaylist(index)
     fun clearPlaylist() = playbackManager.clearPlaylist()
     fun playAt(index: Int) = playbackManager.playAt(index)
+
+    /**
+     * 播放指定曲目：若已在播放列表中则直接定位播放，否则追加到末尾并播放。
+     * 统一各列表（收藏夹/合集/历史/搜索结果）的点击行为，避免重复条目。
+     */
+    fun playOrAdd(track: Track) {
+        val currentPlaylist = playlist.value
+        val index = currentPlaylist.indexOfFirst { it.id == track.id }
+        if (index >= 0) {
+            playAt(index)
+        } else {
+            addToPlaylist(track)
+            playAt(playlist.value.size - 1)
+        }
+    }
     fun toggleRepeatMode() = playbackManager.toggleRepeatMode()
     fun toggleShuffle() = playbackManager.toggleShuffle()
     fun setPlaybackSpeed(speed: Float) = playbackManager.setPlaybackSpeed(speed)

@@ -412,7 +412,12 @@ data class SeasonMedia(
     val pubtime: Long = 0,
     val upper: Upper? = null
 ) {
-    /** 合集内视频字段名与 VideoItem 不同（cover vs pic），在此做映射。 */
+    /**
+     * 合集内视频字段名与 VideoItem 不同（cover vs pic），在此做映射。
+     * 注意：season/list 接口返回的 medias[].id 即为稿件 aid（与 fav/resource/list 一致），
+     * 因此 VideoItem.id 与 VideoItem.aid 取同值；cid 留空，由播放时 ResolvingDataSource
+     * 通过 getVideoInfo(bvid) 解析补齐。
+     */
     fun toVideoItem(): VideoItem = VideoItem(
         id = id,
         aid = id,

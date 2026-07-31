@@ -1,6 +1,5 @@
 package com.biliaudio.ui.screens
 
-import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +42,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,13 +52,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.UserInfo
@@ -110,23 +105,8 @@ fun ProfileScreen(
         }
     }
 
-    // 状态栏颜色与设置页背景一致，离开时恢复透明（与其他页面保持一致）
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        DisposableEffect(Unit) {
-            val window = (view.context as Activity).window
-            val originalColor = window.statusBarColor
-            val controller = WindowCompat.getInsetsController(window, view)
-            val originalLight = controller.isAppearanceLightStatusBars
-            window.statusBarColor = AppColors.ScreenBg.toArgb()
-            // 浅色背景配深色状态栏图标
-            controller.isAppearanceLightStatusBars = true
-            onDispose {
-                window.statusBarColor = originalColor
-                controller.isAppearanceLightStatusBars = originalLight
-            }
-        }
-    }
+    // 状态栏沿用全局 enableEdgeToEdge() 的透明策略，与其他页面保持一致，
+    // 不在此处单独修改 statusBarColor，避免页面切换时颜色闪烁。
 
     Scaffold(
         containerColor = AppColors.ScreenBg,
@@ -196,13 +176,15 @@ fun ProfileScreen(
                     title = "调试模式",
                     subtitle = "启用日志记录",
                     checked = debugEnabled,
-                    onCheckedChange = { settingsViewModel.setDebugEnabled(it) }
+                    onCheckedChange = { settingsViewModel.setDebugEnabled(it) },
+                    iconTint = AppColors.AccentBlue
                 )
                 Divider()
                 SettingsItemRow(
                     icon = Icons.Default.Info,
                     title = "查看日志",
-                    onClick = { showDebugLog = true }
+                    onClick = { showDebugLog = true },
+                    iconTint = AppColors.AccentBlue
                 )
             }
 
@@ -328,7 +310,8 @@ private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
 private fun SettingsItemRow(
     icon: ImageVector,
     title: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    iconTint: Color = AppColors.AccentPink
 ) {
     Row(
         modifier = Modifier
@@ -340,7 +323,7 @@ private fun SettingsItemRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = AppColors.AccentPink,
+            tint = iconTint,
             modifier = Modifier.size(22.scaled())
         )
         Spacer(modifier = Modifier.width(14.scaled()))
@@ -365,7 +348,8 @@ private fun SwitchRow(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    iconTint: Color = AppColors.AccentPink
 ) {
     Row(
         modifier = Modifier
@@ -377,7 +361,7 @@ private fun SwitchRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = AppColors.AccentPink,
+            tint = iconTint,
             modifier = Modifier.size(22.scaled())
         )
         Spacer(modifier = Modifier.width(14.scaled()))

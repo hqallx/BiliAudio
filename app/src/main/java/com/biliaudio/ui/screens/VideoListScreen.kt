@@ -9,13 +9,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -33,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -58,8 +63,26 @@ fun VideoListScreen(
 ) {
     val videos by favoriteViewModel.filteredVideos.collectAsState()
     val isLoading by favoriteViewModel.isLoadingVideos.collectAsState()
+    val videosError by favoriteViewModel.videosError.collectAsState()
+    val hasMore by favoriteViewModel.videosHasMore.collectAsState()
+    val isLoadingMore by favoriteViewModel.isLoadingMoreVideos.collectAsState()
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
+
+    // 列表滚动状态：滑到接近底部时自动加载下一页。
+    // 仅在非搜索态（query 为空）触发，避免在过滤结果上分页。
+    val listState = rememberLazyListState()
+    LaunchedEffect(listState, videos, hasMore, isLoadingMore, query) {
+        snapshotFlow {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val total = listState.layoutInfo.totalItemsCount
+            lastVisible >= 0 && total > 0 && lastVisible >= total - 3
+        }.collect { nearEnd ->
+            if (nearEnd && query.isBlank() && hasMore && !isLoadingMore) {
+                favoriteViewModel.loadMoreVideos()
+            }
+        }
+    }
 
     // 进入页面时根据来源触发加载：
     // - FAVORITE: folderId 为收藏夹 mediaId
@@ -132,6 +155,37 @@ fun VideoListScreen(
                 ) {
                     CircularProgressIndicator()
                 }
+            } else if (videosError != null && videos.isEmpty()) {
+                // 错误状态：展示错误信息 + 重试按钮，而非卡在 loading 或空列表
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = videosError ?: "加载失败",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            when (source) {
+                                VideoListSource.FAVORITE -> favoriteViewModel.loadVideos(folderId)
+                                VideoListSource.SEASON -> favoriteViewModel.loadSeasonOrSeriesVideosAuto(folderId, isSeries)
+                            }
+                        }
+                    ) {
+                        Text("重试")
+                    }
+                }
             } else if (videos.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -156,6 +210,7 @@ fun VideoListScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(
                         start = 12.dp,
                         end = 12.dp,
@@ -172,21 +227,27 @@ fun VideoListScreen(
                             duration = formatDurationMinSec(video.duration),
                             onClick = {
                                 // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
-                                val track = favoriteViewModel.videoToLazyTrack(video)
-                                val currentPlaylist = playerViewModel.playlist.value
-                                val index = currentPlaylist.indexOfFirst { it.id == track.id }
-                                if (index >= 0) {
-                                    playerViewModel.playAt(index)
-                                } else {
-                                    playerViewModel.addToPlaylist(track)
-                                    playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
-                                }
+                                // playOrAdd 统一去重：已存在则定位播放，否则追加并播放。
+                                playerViewModel.playOrAdd(favoriteViewModel.videoToLazyTrack(video))
                             },
                             onAddNext = {
                                 // 下一首播放：插队到当前曲目之后
                                 playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
                             }
                         )
+                    }
+                    // 加载更多尾部：仅在非搜索态展示，避免在过滤结果上误导用户。
+                    if (isLoadingMore && query.isBlank()) {
+                        item(key = "loading_more") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -229,9 +290,8 @@ fun VideoListScreen(
                         duration = formatDurationMinSec(video.duration),
                         onClick = {
                             // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
-                            val track = favoriteViewModel.videoToLazyTrack(video)
-                            playerViewModel.addToPlaylist(track)
-                            playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
+                            // playOrAdd 统一去重：与主列表点击行为一致，避免重复条目。
+                            playerViewModel.playOrAdd(favoriteViewModel.videoToLazyTrack(video))
                         },
                         onAddNext = {
                             // 下一首播放：插队到当前曲目之后

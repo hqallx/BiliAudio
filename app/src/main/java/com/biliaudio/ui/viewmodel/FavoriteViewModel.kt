@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.Result
 import com.biliaudio.data.model.FavoriteFolder
+import com.biliaudio.data.model.HistoryCursor
 import com.biliaudio.data.model.HistoryItem
 import com.biliaudio.data.model.SeasonMeta
 import com.biliaudio.data.model.VideoItem
@@ -37,11 +38,31 @@ class FavoriteViewModel @Inject constructor(
     private val _filteredVideos = MutableStateFlow<List<VideoItem>>(emptyList())
     val filteredVideos: StateFlow<List<VideoItem>> = _filteredVideos.asStateFlow()
 
+    // ============ 视频列表分页 ============
+    // 收藏夹 / 合集视频复用同一组 _videos 状态，分页游标用 _videosPage/_videosHasMore。
+    // _videosLoader 保存「加载第 N 页」的闭包，使 loadMoreVideos 无需区分数据来源。
+    private val _videosPage = MutableStateFlow(1)
+    private val _videosHasMore = MutableStateFlow(false)
+    val videosHasMore: StateFlow<Boolean> = _videosHasMore.asStateFlow()
+
+    private val _isLoadingMoreVideos = MutableStateFlow(false)
+    val isLoadingMoreVideos: StateFlow<Boolean> = _isLoadingMoreVideos.asStateFlow()
+
+    private var videosLoader: (suspend (Int) -> Unit)? = null
+
     private val _isLoadingFolders = MutableStateFlow(false)
     val isLoadingFolders: StateFlow<Boolean> = _isLoadingFolders.asStateFlow()
 
+    /** 收藏夹列表加载错误信息，null 表示无错误。UI 据此展示重试入口。 */
+    private val _foldersError = MutableStateFlow<String?>(null)
+    val foldersError: StateFlow<String?> = _foldersError.asStateFlow()
+
     private val _isLoadingVideos = MutableStateFlow(false)
     val isLoadingVideos: StateFlow<Boolean> = _isLoadingVideos.asStateFlow()
+
+    /** 视频列表加载错误信息，null 表示无错误。UI 据此展示重试入口。 */
+    private val _videosError = MutableStateFlow<String?>(null)
+    val videosError: StateFlow<String?> = _videosError.asStateFlow()
 
     private val _selectedFolder = MutableStateFlow<FavoriteFolder?>(null)
     val selectedFolder: StateFlow<FavoriteFolder?> = _selectedFolder.asStateFlow()
@@ -59,6 +80,21 @@ class FavoriteViewModel @Inject constructor(
     private val _isLoadingSeasons = MutableStateFlow(false)
     val isLoadingSeasons: StateFlow<Boolean> = _isLoadingSeasons.asStateFlow()
 
+    /** 合集列表加载错误信息，null 表示无错误。UI 据此展示重试入口。 */
+    private val _seasonsError = MutableStateFlow<String?>(null)
+    val seasonsError: StateFlow<String?> = _seasonsError.asStateFlow()
+
+    // ============ 合集列表分页 ============
+    private val _seasonsPage = MutableStateFlow(1)
+    private val _seasonsHasMore = MutableStateFlow(false)
+    val seasonsHasMore: StateFlow<Boolean> = _seasonsHasMore.asStateFlow()
+
+    private val _isLoadingMoreSeasons = MutableStateFlow(false)
+    val isLoadingMoreSeasons: StateFlow<Boolean> = _isLoadingMoreSeasons.asStateFlow()
+
+    /** 当前已加载的合集 mid，供 loadMoreSeasons 复用。 */
+    private var seasonsMid: Long = 0
+
     // ============ 播放历史 ============
 
     private val _history = MutableStateFlow<List<HistoryItem>>(emptyList())
@@ -66,6 +102,21 @@ class FavoriteViewModel @Inject constructor(
 
     private val _isLoadingHistory = MutableStateFlow(false)
     val isLoadingHistory: StateFlow<Boolean> = _isLoadingHistory.asStateFlow()
+
+    /** 历史记录加载错误信息，null 表示无错误。UI 据此展示重试入口。 */
+    private val _historyError = MutableStateFlow<String?>(null)
+    val historyError: StateFlow<String?> = _historyError.asStateFlow()
+
+    // ============ 播放历史游标分页 ============
+    // 历史接口为游标分页：每次返回 cursor.max / cursor.view_at，下一页用其作为请求参数。
+    // 当返回空列表或 cursor 无推进时认为已到末页。
+    private val _historyHasMore = MutableStateFlow(false)
+    val historyHasMore: StateFlow<Boolean> = _historyHasMore.asStateFlow()
+
+    private val _isLoadingMoreHistory = MutableStateFlow(false)
+    val isLoadingMoreHistory: StateFlow<Boolean> = _isLoadingMoreHistory.asStateFlow()
+
+    private var historyCursor: HistoryCursor = HistoryCursor()
 
     init {
         viewModelScope.launch {
@@ -95,17 +146,20 @@ class FavoriteViewModel @Inject constructor(
     fun loadFolders(mid: Long) {
         viewModelScope.launch {
             _isLoadingFolders.value = true
+            _foldersError.value = null
             when (val result = favoriteRepository.getFavoriteFolders(mid)) {
                 is Result.Success -> {
                     val response = result.data
                     if (response.code == 0 && response.data != null) {
                         _folders.value = response.data.list
                     } else {
-                        _toast.value = response.message
+                        _foldersError.value = response.message.ifEmpty { "加载收藏夹失败" }
+                        _toast.value = _foldersError.value
                     }
                 }
                 is Result.Error -> {
-                    _toast.value = "加载收藏夹失败: ${result.message}"
+                    _foldersError.value = "加载收藏夹失败: ${result.message}"
+                    _toast.value = _foldersError.value
                 }
                 Result.Loading -> {}
             }
@@ -119,25 +173,56 @@ class FavoriteViewModel @Inject constructor(
     }
 
     fun loadVideos(mediaId: Long, page: Int = 1) {
-        viewModelScope.launch {
+        videosLoader = { p -> loadVideosPage(mediaId, p) }
+        viewModelScope.launch { loadVideosPage(mediaId, page) }
+    }
+
+    private suspend fun loadVideosPage(mediaId: Long, page: Int) {
+        val isFirstPage = page == 1
+        if (isFirstPage) {
             _isLoadingVideos.value = true
-            when (val result = favoriteRepository.getFavoriteResources(mediaId, page)) {
-                is Result.Success -> {
-                    val response = result.data
-                    if (response.code == 0 && response.data != null) {
-                        _videos.value = response.data.medias
-                        applySearchFilter()
+            _videosError.value = null
+        } else {
+            _isLoadingMoreVideos.value = true
+        }
+        when (val result = favoriteRepository.getFavoriteResources(mediaId, page)) {
+            is Result.Success -> {
+                val response = result.data
+                if (response.code == 0 && response.data != null) {
+                    val newVideos = response.data.medias
+                    _videos.value = if (isFirstPage) newVideos else _videos.value + newVideos
+                    _videosPage.value = page
+                    _videosHasMore.value = response.data.has_more
+                    applySearchFilter()
+                } else {
+                    if (isFirstPage) {
+                        _videosError.value = response.message.ifEmpty { "加载视频失败" }
                     } else {
-                        _toast.value = response.message
+                        _toast.value = response.message.ifEmpty { "加载更多失败" }
                     }
                 }
-                is Result.Error -> {
-                    _toast.value = "加载视频失败: ${result.message}"
-                }
-                Result.Loading -> {}
             }
-            _isLoadingVideos.value = false
+            is Result.Error -> {
+                if (isFirstPage) {
+                    _videosError.value = "加载视频失败: ${result.message}"
+                } else {
+                    _toast.value = "加载更多失败: ${result.message}"
+                }
+            }
+            Result.Loading -> {}
         }
+        _isLoadingVideos.value = false
+        _isLoadingMoreVideos.value = false
+    }
+
+    /**
+     * 加载下一页视频（收藏夹或合集，由 [videosLoader] 决定具体接口）。
+     * 已在加载中或无更多数据时直接返回，避免重复请求。
+     */
+    fun loadMoreVideos() {
+        if (_isLoadingMoreVideos.value || !_videosHasMore.value) return
+        val loader = videosLoader ?: return
+        viewModelScope.launch { loader(_videosPage.value + 1) }
     }
 
     /**
@@ -203,14 +288,7 @@ class FavoriteViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             try {
-                var mid = authRepository.getCurrentUserId()
-                // Cookie 中暂时拿不到 mid 时，回退到 DataStore 持久化的 user_id
-                if (mid == null || mid <= 0) {
-                    val idStr = preferencesManager.userId.first()
-                    if (idStr.isNotEmpty()) {
-                        mid = idStr.toLongOrNull()
-                    }
-                }
+                val mid = resolveMid()
                 com.biliaudio.util.DebugLogger.d("FavVM", "refresh: mid=$mid, isLoggedIn=${authRepository.isLoggedIn()}")
                 if (mid != null && mid > 0) {
                     loadFolders(mid)
@@ -226,61 +304,128 @@ class FavoriteViewModel @Inject constructor(
     // ============ 合集 ============
 
     fun loadSeasons(mid: Long) {
-        viewModelScope.launch {
+        seasonsMid = mid
+        viewModelScope.launch { loadSeasonsPage(mid, 1) }
+    }
+
+    private suspend fun loadSeasonsPage(mid: Long, page: Int) {
+        val isFirstPage = page == 1
+        if (isFirstPage) {
             _isLoadingSeasons.value = true
-            try {
-                when (val result = favoriteRepository.getCollectedSeasons(mid)) {
-                    is Result.Success -> {
-                        val response = result.data
-                        if (response.code == 0 && response.data != null) {
-                            // 仅保留追更视频合集(attr==0)，过滤订阅的他人收藏夹(attr=22)与已失效项。
-                            _seasons.value = response.data.list
-                                .filter { it.isSeason && !it.isInvalid && it.id != 0L }
-                                .map { it.toSeasonMeta() }
+            _seasonsError.value = null
+        } else {
+            _isLoadingMoreSeasons.value = true
+        }
+        try {
+            when (val result = favoriteRepository.getCollectedSeasons(mid, page)) {
+                is Result.Success -> {
+                    val response = result.data
+                    if (response.code == 0 && response.data != null) {
+                        // 仅保留追更视频合集(attr==0)，过滤订阅的他人收藏夹(attr=22)与已失效项。
+                        val newSeasons = response.data.list
+                            .filter { it.isSeason && !it.isInvalid && it.id != 0L }
+                            .map { it.toSeasonMeta() }
+                        _seasons.value = if (isFirstPage) newSeasons else _seasons.value + newSeasons
+                        _seasonsPage.value = page
+                        _seasonsHasMore.value = response.data.has_more
+                    } else {
+                        val msg = response.message.ifEmpty { "加载合集失败" }
+                        if (isFirstPage) {
+                            _seasonsError.value = msg
+                            _toast.value = msg
                         } else {
-                            _toast.value = response.message
+                            _toast.value = msg
                         }
                     }
-                    is Result.Error -> {
-                        _toast.value = "加载合集失败: ${result.message}"
-                    }
-                    Result.Loading -> {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                is Result.Error -> {
+                    val msg = "加载合集失败: ${result.message}"
+                    if (isFirstPage) {
+                        _seasonsError.value = msg
+                        _toast.value = msg
+                    } else {
+                        _toast.value = "加载更多失败: ${result.message}"
+                    }
+                }
+                Result.Loading -> {}
             }
-            _isLoadingSeasons.value = false
+        } catch (e: Exception) {
+            val msg = "加载合集失败: ${e.message ?: "未知错误"}"
+            if (isFirstPage) {
+                _seasonsError.value = msg
+                _toast.value = msg
+            } else {
+                _toast.value = "加载更多失败: ${e.message ?: "未知错误"}"
+            }
+            e.printStackTrace()
         }
+        _isLoadingSeasons.value = false
+        _isLoadingMoreSeasons.value = false
+    }
+
+    /**
+     * 加载下一页合集。已在加载中或无更多数据时直接返回。
+     */
+    fun loadMoreSeasons() {
+        if (_isLoadingMoreSeasons.value || !_seasonsHasMore.value || seasonsMid <= 0) return
+        viewModelScope.launch { loadSeasonsPage(seasonsMid, _seasonsPage.value + 1) }
     }
 
     /**
      * 加载指定合集内的视频列表，结果写入 [videos]/[filteredVideos]，
      * 供 VideoListScreen 复用展示与播放。
      */
-    fun loadSeasonVideos(seasonId: Long) {
-        viewModelScope.launch {
+    fun loadSeasonVideos(seasonId: Long, page: Int = 1) {
+        videosLoader = { p -> loadSeasonVideosPage(seasonId, p) }
+        viewModelScope.launch { loadSeasonVideosPage(seasonId, page) }
+    }
+
+    private suspend fun loadSeasonVideosPage(seasonId: Long, page: Int) {
+        val isFirstPage = page == 1
+        if (isFirstPage) {
             _isLoadingVideos.value = true
-            try {
-                when (val result = favoriteRepository.getSeasonVideos(seasonId)) {
-                    is Result.Success -> {
-                        val response = result.data
-                        if (response.code == 0 && response.data != null) {
-                            _videos.value = (response.data.medias ?: emptyList()).map { it.toVideoItem() }
-                            applySearchFilter()
+            _videosError.value = null
+        } else {
+            _isLoadingMoreVideos.value = true
+        }
+        try {
+            when (val result = favoriteRepository.getSeasonVideos(seasonId, page)) {
+                is Result.Success -> {
+                    val response = result.data
+                    if (response.code == 0 && response.data != null) {
+                        val newVideos = (response.data.medias ?: emptyList()).map { it.toVideoItem() }
+                        _videos.value = if (isFirstPage) newVideos else _videos.value + newVideos
+                        _videosPage.value = page
+                        // season/list 接口未返回 has_more，按「本页满 pageSize 即视为可能有更多」启发式判断。
+                        _videosHasMore.value = newVideos.size >= BiliConstants.DEFAULT_PAGE_SIZE
+                        applySearchFilter()
+                    } else {
+                        if (isFirstPage) {
+                            _videosError.value = response.message.ifEmpty { "加载合集视频失败" }
                         } else {
-                            _toast.value = response.message
+                            _toast.value = response.message.ifEmpty { "加载更多失败" }
                         }
                     }
-                    is Result.Error -> {
-                        _toast.value = "加载合集视频失败: ${result.message}"
-                    }
-                    Result.Loading -> {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                is Result.Error -> {
+                    if (isFirstPage) {
+                        _videosError.value = "加载合集视频失败: ${result.message}"
+                    } else {
+                        _toast.value = "加载更多失败: ${result.message}"
+                    }
+                }
+                Result.Loading -> {}
             }
-            _isLoadingVideos.value = false
+        } catch (e: Exception) {
+            if (isFirstPage) {
+                _videosError.value = "加载合集视频失败: ${e.message ?: "未知错误"}"
+            } else {
+                _toast.value = "加载更多失败: ${e.message ?: "未知错误"}"
+            }
+            e.printStackTrace()
         }
+        _isLoadingVideos.value = false
+        _isLoadingMoreVideos.value = false
     }
 
     /**
@@ -297,33 +442,80 @@ class FavoriteViewModel @Inject constructor(
         // 避免 init/refresh 在未登录态下触发失败请求。
         if (!authRepository.isLoggedIn()) {
             _history.value = emptyList()
+            _historyError.value = null
+            _historyHasMore.value = false
             _isLoadingHistory.value = false
             return
         }
-        viewModelScope.launch {
+        viewModelScope.launch { loadHistoryPage(isFirstPage = true) }
+    }
+
+    private suspend fun loadHistoryPage(isFirstPage: Boolean) {
+        if (isFirstPage) {
             _isLoadingHistory.value = true
-            try {
-                when (val result = favoriteRepository.getHistory()) {
-                    is Result.Success -> {
-                        val response = result.data
-                        if (response.code == 0 && response.data != null) {
-                            // 仅保留可转为 VideoItem 的稿件历史
-                            _history.value = response.data.list
-                                .filter { it.history?.business == "archive" }
+            _historyError.value = null
+            // 首页游标重置
+            historyCursor = HistoryCursor()
+        } else {
+            _isLoadingMoreHistory.value = true
+        }
+        try {
+            when (val result = favoriteRepository.getHistory(
+                max = historyCursor.max,
+                viewAt = historyCursor.view_at
+            )) {
+                is Result.Success -> {
+                    val response = result.data
+                    if (response.code == 0 && response.data != null) {
+                        // 仅保留可转为 VideoItem 的稿件历史
+                        val newItems = response.data.list
+                            .filter { it.history?.business == "archive" }
+                        _history.value = if (isFirstPage) newItems else _history.value + newItems
+                        historyCursor = response.data.cursor
+                        // 游标无推进或本页为空 → 已到末页
+                        _historyHasMore.value = newItems.isNotEmpty() &&
+                            (response.data.cursor.max > 0 || response.data.cursor.view_at > 0)
+                    } else {
+                        val msg = response.message.ifEmpty { "加载历史记录失败" }
+                        if (isFirstPage) {
+                            _historyError.value = msg
+                            _toast.value = msg
                         } else {
-                            _toast.value = response.message
+                            _toast.value = msg
                         }
                     }
-                    is Result.Error -> {
-                        _toast.value = "加载历史记录失败: ${result.message}"
-                    }
-                    Result.Loading -> {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                is Result.Error -> {
+                    val msg = "加载历史记录失败: ${result.message}"
+                    if (isFirstPage) {
+                        _historyError.value = msg
+                        _toast.value = msg
+                    } else {
+                        _toast.value = "加载更多失败: ${result.message}"
+                    }
+                }
+                Result.Loading -> {}
             }
-            _isLoadingHistory.value = false
+        } catch (e: Exception) {
+            val msg = "加载历史记录失败: ${e.message ?: "未知错误"}"
+            if (isFirstPage) {
+                _historyError.value = msg
+                _toast.value = msg
+            } else {
+                _toast.value = "加载更多失败: ${e.message ?: "未知错误"}"
+            }
+            e.printStackTrace()
         }
+        _isLoadingHistory.value = false
+        _isLoadingMoreHistory.value = false
+    }
+
+    /**
+     * 加载下一页历史记录。已在加载中或无更多数据时直接返回。
+     */
+    fun loadMoreHistory() {
+        if (_isLoadingMoreHistory.value || !_historyHasMore.value) return
+        viewModelScope.launch { loadHistoryPage(isFirstPage = false) }
     }
 
     /** 将历史记录项转为 VideoItem，用于播放。 */
@@ -334,5 +526,44 @@ class FavoriteViewModel @Inject constructor(
 
     fun consumeToast() {
         _toast.value = null
+    }
+
+    // ============ 重试入口 ============
+    // 各 Tab 加载失败时由 UI 调用，重新解析 mid 并触发对应加载。
+    // 历史 tab 无需 mid，直接 reload。
+
+    /** 重试加载收藏夹列表。 */
+    fun retryFolders() {
+        viewModelScope.launch {
+            val mid = resolveMid()
+            if (mid != null && mid > 0) loadFolders(mid)
+        }
+    }
+
+    /** 重试加载合集列表。 */
+    fun retrySeasons() {
+        viewModelScope.launch {
+            val mid = resolveMid()
+            if (mid != null && mid > 0) loadSeasons(mid)
+        }
+    }
+
+    /** 重试加载播放历史。 */
+    fun retryHistory() {
+        loadHistory()
+    }
+
+    /**
+     * 解析当前用户 mid：优先从 Cookie，回退到 DataStore 持久化的 user_id。
+     */
+    private suspend fun resolveMid(): Long? {
+        var mid = authRepository.getCurrentUserId()
+        if (mid == null || mid <= 0) {
+            val idStr = preferencesManager.userId.first()
+            if (idStr.isNotEmpty()) {
+                mid = idStr.toLongOrNull()
+            }
+        }
+        return mid
     }
 }

@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -647,8 +647,7 @@ private fun PlaylistBottomSheet(
                 ),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(playlist) { track ->
-                    val index = playlist.indexOf(track)
+                itemsIndexed(playlist) { index, track ->
                     PlaylistSheetItem(
                         track = track,
                         isPlaying = index == currentIndex,

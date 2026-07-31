@@ -13,12 +13,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
@@ -43,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,10 +85,17 @@ fun LibraryScreen(
 ) {
     val folders by favoriteViewModel.folders.collectAsState()
     val isLoadingFolders by favoriteViewModel.isLoadingFolders.collectAsState()
+    val foldersError by favoriteViewModel.foldersError.collectAsState()
     val seasons by favoriteViewModel.seasons.collectAsState()
     val isLoadingSeasons by favoriteViewModel.isLoadingSeasons.collectAsState()
+    val seasonsError by favoriteViewModel.seasonsError.collectAsState()
+    val seasonsHasMore by favoriteViewModel.seasonsHasMore.collectAsState()
+    val isLoadingMoreSeasons by favoriteViewModel.isLoadingMoreSeasons.collectAsState()
     val history by favoriteViewModel.history.collectAsState()
     val isLoadingHistory by favoriteViewModel.isLoadingHistory.collectAsState()
+    val historyError by favoriteViewModel.historyError.collectAsState()
+    val historyHasMore by favoriteViewModel.historyHasMore.collectAsState()
+    val isLoadingMoreHistory by favoriteViewModel.isLoadingMoreHistory.collectAsState()
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
 
@@ -197,22 +210,34 @@ fun LibraryScreen(
                 LibraryTab.Favorites -> FavoritesTab(
                     folders = folders,
                     isLoading = isLoadingFolders,
+                    error = foldersError,
+                    onRetry = { favoriteViewModel.retryFolders() },
                     onFolderClick = onFolderClick
                 )
                 LibraryTab.Seasons -> SeasonsTab(
                     seasons = seasons,
                     isLoading = isLoadingSeasons,
+                    error = seasonsError,
+                    onRetry = { favoriteViewModel.retrySeasons() },
+                    hasMore = seasonsHasMore,
+                    isLoadingMore = isLoadingMoreSeasons,
+                    onLoadMore = { favoriteViewModel.loadMoreSeasons() },
                     onSeasonClick = onSeasonClick
                 )
                 LibraryTab.History -> HistoryTab(
                     history = history,
                     isLoading = isLoadingHistory,
+                    error = historyError,
+                    onRetry = { favoriteViewModel.retryHistory() },
+                    hasMore = historyHasMore,
+                    isLoadingMore = isLoadingMoreHistory,
+                    onLoadMore = { favoriteViewModel.loadMoreHistory() },
                     onPlay = { item ->
                         // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                        // playOrAdd 统一去重：与收藏夹/合集列表点击行为一致，避免重复条目。
                         val track = favoriteViewModel.historyItemToLazyTrack(item)
                         if (track != null) {
-                            playerViewModel.addToPlaylist(track)
-                            playerViewModel.playAt(playerViewModel.playlist.value.size - 1)
+                            playerViewModel.playOrAdd(track)
                         }
                     }
                 )
@@ -233,10 +258,16 @@ fun LibraryScreen(
 private fun FavoritesTab(
     folders: List<com.biliaudio.data.model.FavoriteFolder>,
     isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onFolderClick: (Long, String) -> Unit
 ) {
     if (isLoading && folders.isEmpty()) {
         LoadingBox()
+        return
+    }
+    if (error != null && folders.isEmpty()) {
+        ErrorState(message = error, onRetry = onRetry)
         return
     }
     if (folders.isEmpty()) {
@@ -264,18 +295,41 @@ private fun FavoritesTab(
 private fun SeasonsTab(
     seasons: List<com.biliaudio.data.model.SeasonMeta>,
     isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    hasMore: Boolean,
+    isLoadingMore: Boolean,
+    onLoadMore: () -> Unit,
     onSeasonClick: (Long, String, Boolean) -> Unit
 ) {
     if (isLoading && seasons.isEmpty()) {
         LoadingBox()
         return
     }
+    if (error != null && seasons.isEmpty()) {
+        ErrorState(message = error, onRetry = onRetry)
+        return
+    }
     if (seasons.isEmpty()) {
         EmptyState(icon = Icons.Default.LibraryBooks, text = "暂无合集")
         return
     }
+    val gridState = rememberLazyGridState()
+    // 滑到接近底部时自动加载下一页
+    LaunchedEffect(gridState, seasons, hasMore, isLoadingMore) {
+        snapshotFlow {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val total = gridState.layoutInfo.totalItemsCount
+            lastVisible >= 0 && total > 0 && lastVisible >= total - 4
+        }.collect { nearEnd ->
+            if (nearEnd && hasMore && !isLoadingMore) {
+                onLoadMore()
+            }
+        }
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
+        state = gridState,
         contentPadding = PaddingValues(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -288,6 +342,18 @@ private fun SeasonsTab(
                 onClick = { onSeasonClick(season.businessId, season.name, season.isSeries) }
             )
         }
+        if (isLoadingMore) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                }
+            }
+        }
     }
 }
 
@@ -295,10 +361,19 @@ private fun SeasonsTab(
 private fun HistoryTab(
     history: List<com.biliaudio.data.model.HistoryItem>,
     isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    hasMore: Boolean,
+    isLoadingMore: Boolean,
+    onLoadMore: () -> Unit,
     onPlay: (com.biliaudio.data.model.HistoryItem) -> Unit
 ) {
     if (isLoading && history.isEmpty()) {
         LoadingBox()
+        return
+    }
+    if (error != null && history.isEmpty()) {
+        ErrorState(message = error, onRetry = onRetry)
         return
     }
     if (history.isEmpty()) {
@@ -306,7 +381,21 @@ private fun HistoryTab(
         return
     }
     val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+    val listState = rememberLazyListState()
+    // 滑到接近底部时自动加载下一页
+    LaunchedEffect(listState, history, hasMore, isLoadingMore) {
+        snapshotFlow {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val total = listState.layoutInfo.totalItemsCount
+            lastVisible >= 0 && total > 0 && lastVisible >= total - 3
+        }.collect { nearEnd ->
+            if (nearEnd && hasMore && !isLoadingMore) {
+                onLoadMore()
+            }
+        }
+    }
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -321,6 +410,18 @@ private fun HistoryTab(
                 duration = formatDurationMinSec(item.duration),
                 onClick = { onPlay(item) }
             )
+        }
+        if (isLoadingMore) {
+            item(key = "loading_more") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                }
+            }
         }
     }
 }
@@ -357,6 +458,43 @@ private fun EmptyState(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * 错误态：展示错误信息 + 重试按钮。
+ * 与 VideoListScreen 的错误态保持视觉一致（CloudOff 图标 + 文案 + 重试）。
+ */
+@Composable
+private fun ErrorState(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudOff,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRetry) {
+                Text("重试")
+            }
         }
     }
 }
@@ -399,8 +537,7 @@ private fun PlaylistTab(
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(playlist) { track ->
-                val index = playlist.indexOf(track)
+            itemsIndexed(playlist) { index, track ->
                 com.biliaudio.ui.components.VideoCard(
                     title = track.title,
                     artist = track.artist,

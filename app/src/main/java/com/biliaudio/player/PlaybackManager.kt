@@ -32,6 +32,14 @@ class PlaybackManager @Inject constructor(
 
     private var mediaController: MediaController? = null
 
+    /**
+     * 在 MediaController 未连接期间用户触发的播放操作（setPlaylist / playOrAdd 等）。
+     * controller 连接成功后会优先应用 pending 列表并播放，避免被 restorePlaybackState 覆盖，
+     * 也避免「点击播放全部后列表已填充却不出声」的静默失败。
+     */
+    private data class PendingPlayback(val tracks: List<Track>, val startIndex: Int)
+    private var pendingPlayback: PendingPlayback? = null
+
     // 睡眠定时器用的协程作用域，与 ViewModel 生命周期解耦，
     // 避免关闭播放页弹层后定时器被取消。
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -151,9 +159,17 @@ class PlaybackManager @Inject constructor(
                     RepeatMode.ALL -> androidx.media3.common.Player.REPEAT_MODE_ALL
                     RepeatMode.ONE -> androidx.media3.common.Player.REPEAT_MODE_ONE
                 }
-                // 恢复上次播放状态（列表+位置），不自动播放。
+                // 连接成功后优先应用 pending 播放操作（用户在 controller 未就绪期间触发的播放）；
+                // 无 pending 时才恢复上次播放状态（列表+位置，不自动播放）。
                 // 用 serviceScope 避免阻塞 directExecutor 线程。
-                serviceScope.launch { restorePlaybackState() }
+                serviceScope.launch {
+                    val pending = pendingPlayback
+                    if (pending != null) {
+                        applyPendingPlayback(pending)
+                    } else {
+                        restorePlaybackState()
+                    }
+                }
             } catch (e: Exception) {
                 // MediaController 连接失败不应导致应用崩溃
                 e.printStackTrace()
@@ -211,11 +227,18 @@ class PlaybackManager @Inject constructor(
         _currentTrack.value = tracks.getOrNull(safeIndex)
         _playbackError.value = null
 
-        val mediaItems = tracks.map { it.toMediaItem() }
+        val controller = mediaController
+        if (controller == null) {
+            // controller 未就绪：暂存待连接后应用，避免静默失败。
+            // 状态流已更新，UI 会显示列表；连接成功后 applyPendingPlayback 会真正开始播放。
+            pendingPlayback = PendingPlayback(tracks, safeIndex)
+            return
+        }
 
-        mediaController?.setMediaItems(mediaItems, safeIndex, 0L)
-        mediaController?.prepare()
-        mediaController?.play()
+        val mediaItems = tracks.map { it.toMediaItem() }
+        controller.setMediaItems(mediaItems, safeIndex, 0L)
+        controller.prepare()
+        controller.play()
         savePlaybackState()
     }
 
@@ -374,6 +397,24 @@ class PlaybackManager @Inject constructor(
                 e.printStackTrace()
             }
         }
+    }
+
+    /**
+     * 应用 controller 连接前暂存的播放操作。
+     * 复用 [setPlaylist] 的主体逻辑（此时 mediaController 已就绪），并清空 pending。
+     */
+    private fun applyPendingPlayback(pending: PendingPlayback) {
+        pendingPlayback = null
+        val controller = mediaController ?: return
+        _playlist.value = pending.tracks
+        _currentIndex.value = pending.startIndex
+        _currentTrack.value = pending.tracks.getOrNull(pending.startIndex)
+        _playbackError.value = null
+        val mediaItems = pending.tracks.map { it.toMediaItem() }
+        controller.setMediaItems(mediaItems, pending.startIndex, 0L)
+        controller.prepare()
+        controller.play()
+        savePlaybackState()
     }
 
     /**
