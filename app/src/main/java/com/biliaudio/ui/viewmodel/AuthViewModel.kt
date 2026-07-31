@@ -436,14 +436,16 @@ class AuthViewModel @Inject constructor(
     }
 
     fun loadUserInfo() {
-        // 防重入：取消上一个未完成的 nav 请求，避免并发导致状态混乱
+        // 防重入：取消上一个未完成的请求，避免并发导致状态混乱
         userJob?.cancel()
         userJob = viewModelScope.launch {
             try {
-                DebugLogger.d("AuthVM", "loadUserInfo: 调用 nav")
+                DebugLogger.d("AuthVM", "loadUserInfo: 调用 myinfo")
+                // 同时刷新 WBI 签名密钥（不阻塞用户信息获取）
+                launch { authRepository.refreshWbiKeys() }
                 when (val result = authRepository.getUserInfo()) {
                     is NavResult.LoggedIn -> {
-                        DebugLogger.d("AuthVM", "nav 成功: mid=${result.userInfo.mid}")
+                        DebugLogger.d("AuthVM", "myinfo 成功: mid=${result.userInfo.mid}, name=${result.userInfo.name}")
                         // 接口明确返回已登录：更新完整用户信息并持久化
                         _userInfo.value = result.userInfo
                         preferencesManager.saveUserInfo(
@@ -453,25 +455,16 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                     is NavResult.NotLoggedIn -> {
-                        // 完全照搬 BBPlayer：nav 返回 -101 时**不清除 Cookie、不退出登录**。
-                        //
-                        // BBPlayer 对 nav 接口甚至不检查 code（直接返回 data），
-                        // 登录态完全由磁盘 Cookie 决定（hasLoginCookies）。
-                        // nav -101 可能是服务端瞬时风控/缓存/网络抖动，Cookie 仍有效。
-                        // 只有用户主动「退出登录」时才清除 Cookie。
-                        //
-                        // 这是「划掉后台后退出登录」的根因修复：
-                        // 之前 nav -101 会 clearCookies() + _isLoggedIn=false，
-                        // 导致进程重启后 nav 接口偶发 -101 就把有效 Cookie 清掉。
-                        DebugLogger.w("AuthVM", "nav 返回 -101，保留 Cookie 与登录态（照搬 BBPlayer）")
+                        // 照搬 BBPlayer：myinfo 返回 -101 时不清除 Cookie、不退出登录。
+                        // 登录态完全由磁盘 Cookie 决定，只有用户主动「退出登录」才清 Cookie。
+                        DebugLogger.w("AuthVM", "myinfo 返回 -101，保留 Cookie 与登录态（照搬 BBPlayer）")
                         if (_userInfo.value == null) {
                             restoreBasicUserInfo()
                         }
                     }
                     is NavResult.Failed -> {
-                        DebugLogger.w("AuthVM", "nav Failed: ${result.message}")
+                        DebugLogger.w("AuthVM", "myinfo Failed: ${result.message}")
                         // 网络/解析错误：Cookie 可能仍有效，不登出。
-                        // 用 Cookie 中的 mid 做兜底，避免「我的」页面误显示未登录。
                         if (_userInfo.value == null) {
                             restoreBasicUserInfo()
                         }

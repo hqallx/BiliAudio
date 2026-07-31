@@ -83,36 +83,50 @@ class AuthRepository @Inject constructor(
 
     /**
      * 获取当前登录用户信息。
-     * 使用 x/web-interface/nav 接口（基于 Cookie，无需 WBI 签名）。
+     * 照搬 BBPlayer：使用 /x/space/myinfo 而非 /x/web-interface/nav。
+     *
+     * 为什么不用 nav：
+     * - nav 接口易被风控返回 -101（即使 Cookie 有效），导致头像/名称无法获取
+     * - BBPlayer 用 myinfo 获取用户信息（name/face/sign/level），更稳定
+     * - nav 仅用于同步 WBI 签名密钥（见 [refreshWbiKeys]）
      *
      * 返回 [NavResult] 以区分三种状态，便于上层决定是否登出：
      * - [NavResult.LoggedIn]：接口明确返回已登录，附带完整 UserInfo
-     * - [NavResult.NotLoggedIn]：接口明确返回未登录（code=-101 或 isLogin=false），
-     *   说明 Cookie 已失效，应当 logout
+     * - [NavResult.NotLoggedIn]：接口明确返回未登录（code=-101），Cookie 可能失效
      * - [NavResult.Failed]：网络/解析错误，Cookie 可能仍有效，不应 logout
      */
     suspend fun getUserInfo(): NavResult = try {
-        val resp = api.getNavInfo()
-        // 同步提取并缓存 WBI 签名密钥（nav 接口始终返回 wbi_img，不依赖登录态）。
-        // 后续 playurl 等 WBI 接口需要用到。
-        resp.data?.wbi_img?.let { wbi ->
-            wbiSigner.updateKeys(wbi.img_url, wbi.sub_url)
-        }
+        val resp = api.getMyInfo()
+        DebugLogger.d("AuthRepo", "myinfo: code=${resp.code}, mid=${resp.data?.mid}, name=${resp.data?.name}")
         when {
-            // code=0 且 isLogin=true：正常已登录
-            resp.code == 0 && resp.data != null && resp.data.isLogin -> {
+            // code=0 且 mid>0：正常已登录
+            resp.code == 0 && resp.data != null && resp.data.mid > 0 -> {
                 val info = resp.data.toUserInfo()
                 if (info != null) NavResult.LoggedIn(info) else NavResult.NotLoggedIn
             }
-            // code=-101：账号未登录（Cookie 失效）
-            // isLogin=false：服务端明确告知未登录
-            resp.code == -101 || (resp.code == 0 && resp.data?.isLogin == false) -> NavResult.NotLoggedIn
-            // 其他 code（如 -352 风控、-509 限流、-403 等）：
-            // Cookie 可能仍有效，不应据此登出，交给上层按 Failed 处理（保留登录态）。
-            else -> NavResult.Failed("nav 接口返回 code=${resp.code}: ${resp.message}")
+            // code=-101：账号未登录（Cookie 可能失效）
+            resp.code == -101 -> NavResult.NotLoggedIn
+            // 其他 code：Cookie 可能仍有效，不应据此登出
+            else -> NavResult.Failed("myinfo 接口返回 code=${resp.code}: ${resp.message}")
         }
     } catch (e: Exception) {
+        DebugLogger.e("AuthRepo", "myinfo 异常", e)
         NavResult.Failed(e.message ?: "获取用户信息失败")
+    }
+
+    /**
+     * 同步 WBI 签名密钥（nav 接口始终返回 wbi_img，不依赖登录态）。
+     * 与用户信息获取解耦：myinfo 拿用户信息，nav 仅拿 wbi keys。
+     */
+    suspend fun refreshWbiKeys() {
+        try {
+            val resp = api.getNavInfo()
+            resp.data?.wbi_img?.let { wbi ->
+                wbiSigner.updateKeys(wbi.img_url, wbi.sub_url)
+            }
+        } catch (e: Exception) {
+            DebugLogger.w("AuthRepo", "refreshWbiKeys 失败（不影响登录态）: ${e.message}")
+        }
     }
 
     fun clearCookies() {

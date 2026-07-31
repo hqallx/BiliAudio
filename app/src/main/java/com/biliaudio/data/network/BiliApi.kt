@@ -16,6 +16,14 @@ interface BiliApi {
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): BiliResponse<NavInfo>
 
+    /**
+     * 获取当前登录用户详细信息（基于 Cookie，无需 WBI 签名）。
+     * 照搬 BBPlayer 的 getUserInfo：用 /x/space/myinfo 而非 nav，
+     * 更稳定，不易被风控返回 -101。返回 name/face/sign/level。
+     */
+    @GET("x/space/myinfo")
+    suspend fun getMyInfo(): BiliResponse<MyInfo>
+
     @GET("x/v3/fav/folder/created/list")
     suspend fun getFavoriteFolders(
         @Query("up_mid") mid: Long,

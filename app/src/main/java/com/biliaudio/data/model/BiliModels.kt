@@ -53,6 +53,31 @@ data class NavLevelInfo(
 )
 
 /**
+ * /x/space/myinfo 返回的当前登录用户详细信息。
+ * 仅凭 Cookie 即可获取，比 nav 接口更稳定（不易被风控返回 -101）。
+ * 照搬 BBPlayer 的 getUserInfo 实现。
+ */
+@Serializable
+data class MyInfo(
+    val mid: Long = 0,
+    val name: String = "",
+    val face: String = "",
+    val sign: String = "",
+    val level: Int = 0
+) {
+    fun toUserInfo(): UserInfo? {
+        if (mid == 0L) return null
+        return UserInfo(
+            mid = mid,
+            name = name,
+            face = face.toHttpsUrl(),
+            sign = sign,
+            level = level
+        )
+    }
+}
+
+/**
  * nav 接口返回的 WBI 签名密钥信息。
  * img_url 和 sub_url 的路径末段（去掉扩展名）分别为 img_key 与 sub_key，
  * 二者拼接后经混淆表处理得到 mixin_key，用于对 WBI 接口请求参数签名。
