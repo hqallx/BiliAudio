@@ -114,12 +114,13 @@ object DebugLogger {
 
     fun clear() {
         _logs.value = emptyList()
-        logFile?.let { file ->
-            try {
-                if (file.exists()) file.delete()
-            } catch (e: Exception) {
-                Log.e(TAG, "删除日志文件失败", e)
+        val file = logFile ?: return
+        try {
+            if (file.exists()) {
+                file.delete()
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "删除日志文件失败", e)
         }
     }
 }
