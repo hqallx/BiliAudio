@@ -381,11 +381,13 @@ fun PlayerScreen(
                 if (url != null) {
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}
-$url")
+                        putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}\n$url")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    moreContext.startActivity(Intent.createChooser(shareIntent, "分享视频").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    moreContext.startActivity(
+                        Intent.createChooser(shareIntent, "分享视频")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
                 } else {
                     android.widget.Toast.makeText(moreContext, "当前无可用视频信息", android.widget.Toast.LENGTH_SHORT).show()
                 }
