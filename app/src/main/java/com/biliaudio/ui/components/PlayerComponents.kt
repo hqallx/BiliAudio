@@ -65,7 +65,6 @@ import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import com.biliaudio.ui.theme.AppColors
-import android.content.Intent
 import java.util.concurrent.TimeUnit
 
 // ====== 深色播放器色板（参考网易云/B站暗色播放器） ======
@@ -182,6 +181,7 @@ fun PlayerScreen(
 ) {
     var showPlaylistSheet by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
+    var showCommentSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
 
     Box(
@@ -350,38 +350,24 @@ fun PlayerScreen(
                 )
             }
 
-            // 点赞 & 评论：跳转至应用内 WebView (VideoWebViewActivity) 调用原站交互
-            val playerContext = LocalContext.current
-            IconButton(onClick = {
-                val bvid = track?.bvid ?: ""
-                if (bvid.isNotEmpty()) {
-                    val intent = Intent(playerContext, com.biliaudio.ui.screens.VideoWebViewActivity::class.java).apply {
-                        putExtra("bvid", bvid)
-                        putExtra("title", track?.title ?: "视频详情")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    playerContext.startActivity(intent)
-                }
-            }) {
+            // 点赞 (App 内原生接口)
+            IconButton(onClick = { interactionViewModel.toggleLike() }) {
+                val liked = interactionViewModel.isLiked.collectAsState().value
                 Icon(
-                    imageVector = Icons.Default.ThumbUp,
+                    imageVector = if (liked) Icons.Filled.ThumbUp else Icons.Default.ThumbUp,
                     contentDescription = "点赞",
-                    tint = PlayerTextMuted,
+                    tint = if (liked) PlayerAccent else PlayerTextMuted,
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = {
-                val bvid = track?.bvid ?: ""
-                if (bvid.isNotEmpty()) {
-                    val intent = Intent(playerContext, com.biliaudio.ui.screens.VideoWebViewActivity::class.java).apply {
-                        putExtra("bvid", bvid)
-                        putExtra("title", track?.title ?: "视频详情")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    playerContext.startActivity(intent)
-                }
-            }) {
+            Text(
+                text = formatCount(interactionViewModel.stat.collectAsState().value?.like ?: 0),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerTextMuted
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            // 评论入口
+            IconButton(onClick = { showCommentSheet = true }) {
                 Icon(
                     imageVector = Icons.Outlined.ModeComment,
                     contentDescription = "评论",
@@ -389,6 +375,11 @@ fun PlayerScreen(
                     modifier = Modifier.size(20.dp)
                 )
             }
+            Text(
+                text = formatCount(interactionViewModel.stat.collectAsState().value?.reply ?: 0),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerTextMuted
+            )
             Spacer(modifier = Modifier.width(8.dp))
             // 更多：分享当前视频
             val moreContext = LocalContext.current
@@ -615,6 +606,14 @@ fun PlayerScreen(
     }
 
     // ===== 睡眠定时器 BottomSheet =====
+    if (showCommentSheet) {
+        CommentBottomSheet(
+            comments = interactionViewModel.comments.collectAsState().value,
+            onSendComment = { msg -> interactionViewModel.sendComment(msg) },
+            viewModel = interactionViewModel,
+            onDismiss = { showCommentSheet = false }
+        )
+    }
     if (showSleepSheet) {
         SleepTimerSheet(
             currentMinutes = sleepTimerMinutes,
@@ -972,6 +971,107 @@ private fun SleepTimerSheet(
                             tint = PlayerAccent
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CommentBottomSheet(
+    comments: List<com.biliaudio.data.model.ReplyItem>,
+    onSendMessage: (String) -> Unit,
+    viewModel: InteractionViewModel,
+    onDismiss: () -> Unit
+) {
+    var inputText by remember { mutableStateOf("") }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "评论 (${'$'}{comments.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = null)
+                }
+            }
+            if (comments.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("暂无评论", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(comments) { comment ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = comment.member?.avatar,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = comment.member?.uname ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppColors.AccentPink
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = comment.content?.message ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("发送一条评论...") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            viewModel.sendComment(inputText)
+                            inputText = ""
+                        }
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = {
+                    viewModel.sendComment(inputText)
+                    inputText = ""
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "发送",
+                        tint = AppColors.AccentPink
+                    )
                 }
             }
         }

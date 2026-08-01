@@ -1,7 +1,10 @@
 package com.biliaudio.data.network
 
 import com.biliaudio.data.model.*
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 interface BiliApi {
@@ -121,3 +124,31 @@ interface BiliApi {
         @Query("view_at") viewAt: Long = 0
     ): BiliResponse<HistoryResponse>
 }
+    // ============ 评论 & 点赞 ============
+    /** 获取评论列表（按热度排序） */
+    @GET("x/v2/reply/main")
+    suspend fun getComments(
+        @Query("oid") oid: Long,
+        @Query("type") type: Int = 1,
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20
+    ): ReplyListResponse
+
+    /** 点赞视频（按 B站接口规范调用） */
+    @FormUrlEncoded
+    @POST("x/web-interface/like")
+    suspend fun likeVideo(
+        @Field("aid") aid: Long,
+        @Field("like") like: Int,
+        @Field("csrf") csrf: String
+    ): ApiActionResponse
+
+    /** 发送视频评论 */
+    @FormUrlEncoded
+    @POST("x/v2/reply/add")
+    suspend fun addComment(
+        @Field("oid") oid: Long,
+        @Field("type") type: Int = 1,
+        @Field("message") message: String,
+        @Field("csrf") csrf: String
+    ): ApiActionResponse

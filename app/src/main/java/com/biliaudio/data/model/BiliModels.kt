@@ -172,7 +172,8 @@ data class VideoInfoResponse(
     val title: String = "",
     val pic: String = "",
     val duration: Int = 0,
-    val owner: Upper? = null
+    val owner: Upper? = null,
+    val stat: VideoStat? = null
 )
 
 @Serializable
@@ -517,4 +518,69 @@ data class HistoryCursor(
     val max: Long = 0,
     val business: String = "",
     val view_at: Long = 0
+)
+// ============ 互动：点赞 & 评论 ============
+
+/** 视频统计信息（点赞数、评论数、播放数等） */
+@Serializable
+data class VideoStat(
+    val aid: Long = 0,
+    val view: Long = 0,
+    val danmaku: Long = 0,
+    val reply: Long = 0,
+    val favorite: Long = 0,
+    val coin: Long = 0,
+    val share: Long = 0,
+    val like: Long = 0
+)
+
+/** 点赞/发送评论等操作的通用响应 */
+@Serializable
+data class ApiActionResponse(
+    val code: Int = 0,
+    val message: String = ""
+)
+
+/** 评论列表响应 */
+@Serializable
+data class ReplyListResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: ReplyData? = null
+)
+
+@Serializable
+data class ReplyData(
+    val replies: List<ReplyItem> = emptyList(),
+    val page: ReplyPage? = null
+)
+
+@Serializable
+data class ReplyPage(
+    val count: Int = 0,
+    val num: Int = 0,
+    val size: Int = 0
+)
+
+@Serializable
+data class ReplyItem(
+    val rpid: Long = 0,
+    val mid: Long = 0,
+    val ctime: Long = 0,
+    val like: Long = 0,
+    val content: ReplyContent? = null,
+    val member: ReplyMember? = null,
+    val replies: List<ReplyItem>? = null // 楼中楼回复
+)
+
+@Serializable
+data class ReplyContent(
+    val message: String = ""
+)
+
+@Serializable
+data class ReplyMember(
+    val mid: Long = 0,
+    val uname: String = "",
+    val avatar: String = ""
 )

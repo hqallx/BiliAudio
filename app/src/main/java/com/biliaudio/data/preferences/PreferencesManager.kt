@@ -21,6 +21,7 @@ private val Context.dataStore by preferencesDataStore(name = "bili_audio_prefs")
 class PreferencesManager(private val context: Context) {
 
     private val cookiesKey = stringPreferencesKey("cookies")
+    private val csrfTokenKey = stringPreferencesKey("csrf_token")
     private val userIdKey = stringPreferencesKey("user_id")
     private val userNameKey = stringPreferencesKey("user_name")
     private val userAvatarKey = stringPreferencesKey("user_avatar")
@@ -36,6 +37,7 @@ class PreferencesManager(private val context: Context) {
 
     val cookies: Flow<String> = context.dataStore.data.map { it[cookiesKey] ?: "" }
 
+    val csrfToken: Flow<String> = context.dataStore.data.map { it[csrfTokenKey] ?: "" }
     val userId: Flow<String> = context.dataStore.data.map { it[userIdKey] ?: "" }
 
     val userName: Flow<String> = context.dataStore.data.map { it[userNameKey] ?: "" }
@@ -63,7 +65,13 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { it[cookiesKey] = cookies }
     }
 
-    suspend fun saveUserInfo(id: String, name: String, avatar: String) {
+    suspend fun saveCsrfToken(token: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[csrfTokenKey] = token }
+        }
+    }
+
+    fun saveUserInfo(id: String, name: String, avatar: String) {
         context.dataStore.edit { preferences ->
             preferences[userIdKey] = id
             preferences[userNameKey] = name
