@@ -64,6 +64,7 @@ import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import com.biliaudio.ui.theme.AppColors
+import android.content.Intent
 import java.util.concurrent.TimeUnit
 
 // ====== 深色播放器色板（参考网易云/B站暗色播放器） ======
@@ -158,6 +159,7 @@ fun PlayerScreen(
     playbackSpeed: Float,
     sleepTimerMinutes: Int,
     isLoading: Boolean,
+    isRetrying: Boolean,
     playbackError: String?,
     playlist: List<Track>,
     currentIndex: Int,
@@ -264,7 +266,7 @@ fun PlayerScreen(
                             androidx.compose.material3.CircularProgressIndicator(color = Color.White)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "正在加载...",
+                                text = if (isRetrying) "正在重试..." else "正在加载...",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White
                             )
@@ -292,7 +294,15 @@ fun PlayerScreen(
                                     containerColor = PlayerAccent
                                 )
                             ) {
-                                Text(text = "重试", color = Color.White)
+                                if (isRetrying) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(text = "重试", color = Color.White)
+                                }
                             }
                         }
                     }
@@ -358,10 +368,27 @@ fun PlayerScreen(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            // 更多
+            // 更多：分享当前视频
             val moreContext = LocalContext.current
             IconButton(onClick = {
-                android.widget.Toast.makeText(moreContext, "功能开发中", android.widget.Toast.LENGTH_SHORT).show()
+                val bvid = track?.bvid
+                val aid = track?.aid ?: 0L
+                val url = if (!bvid.isNullOrEmpty()) {
+                    "https://www.bilibili.com/video/$bvid"
+                } else if (aid > 0) {
+                    "https://www.bilibili.com/video/av$aid"
+                } else null
+                if (url != null) {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}
+$url")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    moreContext.startActivity(Intent.createChooser(shareIntent, "分享视频").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } else {
+                    android.widget.Toast.makeText(moreContext, "当前无可用视频信息", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,

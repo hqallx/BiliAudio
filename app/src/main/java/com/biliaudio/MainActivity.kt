@@ -101,6 +101,7 @@ fun AppRoot(
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
     val sleepTimerMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val isPlayerLoading by playerViewModel.isLoading.collectAsStateWithLifecycle()
+    val isPlayerRetrying by playerViewModel.isRetrying.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playbackError.collectAsStateWithLifecycle()
     val playlist by playerViewModel.playlist.collectAsStateWithLifecycle()
     val currentIndex by playerViewModel.currentIndex.collectAsStateWithLifecycle()
@@ -326,6 +327,7 @@ fun AppRoot(
             playbackSpeed = playbackSpeed,
             sleepTimerMinutes = sleepTimerMinutes,
             isLoading = isPlayerLoading,
+            isRetrying = isPlayerRetrying,
             playbackError = playerError,
             playlist = playlist,
             currentIndex = currentIndex,
