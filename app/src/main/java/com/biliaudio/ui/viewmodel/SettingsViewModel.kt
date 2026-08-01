@@ -72,7 +72,7 @@ class SettingsViewModel @Inject constructor(
         _toast.value = null
     }
 
-    /** 主动弹一条 toast 提示（用于「功能开发中」等占位入口反馈）。 */
+    /** 主动弹一条 toast 提示（用于通用 Toast 提示反馈）。 */
     fun toast(message: String) {
         _toast.value = message
     }
