@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -242,11 +245,24 @@ fun PlayerScreen(
                 .fillMaxWidth()
                 .padding(top = 8.dp)
         ) {
+            var swipeX by remember { mutableStateOf(0f) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(320.dp)
                     .clip(RoundedCornerShape(16.dp))
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (swipeX > 100f) onPrevious()
+                                else if (swipeX < -100f) onNext()
+                                swipeX = 0f
+                            }
+                        ) { change, dragAmount ->
+                            change.consume()
+                            swipeX += dragAmount
+                        }
+                    }
             ) {
                 AsyncImage(
                     model = track?.coverUrl,
@@ -334,7 +350,45 @@ fun PlayerScreen(
                 )
             }
 
-            // 此处原本为点赞/评论统计数，因 API 未提供相关数据，暂时隐藏以保持界面整洁。
+            // 点赞 & 评论：跳转至应用内 WebView (VideoWebViewActivity) 调用原站交互
+            val playerContext = LocalContext.current
+            IconButton(onClick = {
+                val bvid = track?.bvid ?: ""
+                if (bvid.isNotEmpty()) {
+                    val intent = Intent(playerContext, com.biliaudio.ui.screens.VideoWebViewActivity::class.java).apply {
+                        putExtra("bvid", bvid)
+                        putExtra("title", track?.title ?: "视频详情")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    playerContext.startActivity(intent)
+                }
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ThumbUp,
+                    contentDescription = "点赞",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = {
+                val bvid = track?.bvid ?: ""
+                if (bvid.isNotEmpty()) {
+                    val intent = Intent(playerContext, com.biliaudio.ui.screens.VideoWebViewActivity::class.java).apply {
+                        putExtra("bvid", bvid)
+                        putExtra("title", track?.title ?: "视频详情")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    playerContext.startActivity(intent)
+                }
+            }) {
+                Icon(
+                    imageVector = Icons.Outlined.ModeComment,
+                    contentDescription = "评论",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
             // 更多：分享当前视频
             val moreContext = LocalContext.current
