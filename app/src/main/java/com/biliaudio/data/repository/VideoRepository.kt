@@ -274,8 +274,12 @@ class VideoRepository @Inject constructor(
     /**
      * 获取评论列表。
      */
-    suspend fun fetchComments(aid: Long, page: Int = 1): Result<ReplyListResponse> = resultOf {
-        api.getComments(oid = aid, type = 1, pn = page, ps = 20)
+    suspend fun fetchComments(aid: Long, page: Int = 1): Result<ReplyListResponse> {
+        return try {
+            Result.Success(api.getComments(oid = aid, type = 1, pn = page, ps = 20))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
     }
 
     /**
@@ -285,7 +289,11 @@ class VideoRepository @Inject constructor(
     suspend fun likeVideo(aid: Long, like: Int): Result<ApiActionResponse> {
         val csrf = preferencesManager.csrfToken.first()
         if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
-        return resultOf { api.likeVideo(aid, like, csrf) }
+        return try {
+            Result.Success(api.likeVideo(aid, like, csrf))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
     }
 
     /**
@@ -294,7 +302,11 @@ class VideoRepository @Inject constructor(
     suspend fun sendComment(aid: Long, message: String): Result<ApiActionResponse> {
         val csrf = preferencesManager.csrfToken.first()
         if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
-        return resultOf { api.addComment(oid = aid, type = 1, message = message, csrf = csrf) }
+        return try {
+            Result.Success(api.addComment(oid = aid, type = 1, message = message, csrf = csrf))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
     }
     private data class CacheEntry(
         val url: String,

@@ -123,7 +123,7 @@ interface BiliApi {
         @Query("max") max: Long = 0,
         @Query("view_at") viewAt: Long = 0
     ): BiliResponse<HistoryResponse>
-}
+
     // ============ 评论 & 点赞 ============
     /** 获取评论列表（按热度排序） */
     @GET("x/v2/reply/main")
@@ -152,3 +152,4 @@ interface BiliApi {
         @Field("message") message: String,
         @Field("csrf") csrf: String
     ): ApiActionResponse
+}

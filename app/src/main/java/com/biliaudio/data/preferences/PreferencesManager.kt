@@ -69,7 +69,7 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { it[csrfTokenKey] = token }
     }
 
-    fun saveUserInfo(id: String, name: String, avatar: String) {
+    suspend fun saveUserInfo(id: String, name: String, avatar: String) {
         context.dataStore.edit { preferences ->
             preferences[userIdKey] = id
             preferences[userNameKey] = name

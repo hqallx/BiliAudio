@@ -65,6 +65,13 @@ import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import com.biliaudio.ui.viewmodel.InteractionViewModel
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material3.OutlinedTextField
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.collectAsState
+import android.content.Intent
 import com.biliaudio.ui.theme.AppColors
 import java.util.concurrent.TimeUnit
 
@@ -598,8 +605,7 @@ fun PlayerScreen(
     if (showCommentSheet) {
         CommentBottomSheet(
             comments = interactionViewModel.comments.collectAsState().value,
-            onSendComment = { msg -> interactionViewModel.sendComment(msg) },
-            viewModel = interactionViewModel,
+            onSendMessage = { msg -> interactionViewModel.sendComment(msg) },
             onDismiss = { showCommentSheet = false }
         )
     }
@@ -1003,7 +1009,7 @@ private fun CommentBottomSheet(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(comments) { comment ->
+                    items(items = comments) { comment ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
