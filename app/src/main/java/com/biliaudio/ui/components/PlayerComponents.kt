@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
+import com.biliaudio.ui.viewmodel.InteractionViewModel
 import com.biliaudio.ui.theme.AppColors
 import java.util.concurrent.TimeUnit
 
@@ -177,6 +178,7 @@ fun PlayerScreen(
     onClearPlaylist: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    interactionViewModel: InteractionViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     var showPlaylistSheet by remember { mutableStateOf(false) }

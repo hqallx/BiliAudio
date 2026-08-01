@@ -66,9 +66,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun saveCsrfToken(token: String) {
-        viewModelScope.launch {
-            context.dataStore.edit { it[csrfTokenKey] = token }
-        }
+        context.dataStore.edit { it[csrfTokenKey] = token }
     }
 
     fun saveUserInfo(id: String, name: String, avatar: String) {
