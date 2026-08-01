@@ -245,24 +245,11 @@ fun PlayerScreen(
                 .fillMaxWidth()
                 .padding(top = 8.dp)
         ) {
-            var swipeX by remember { mutableStateOf(0f) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(320.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = {
-                                if (swipeX > 100f) onPrevious()
-                                else if (swipeX < -100f) onNext()
-                                swipeX = 0f
-                            }
-                        ) { change, dragAmount ->
-                            change.consume()
-                            swipeX += dragAmount
-                        }
-                    }
             ) {
                 AsyncImage(
                     model = track?.coverUrl,
