@@ -37,8 +37,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -336,37 +334,7 @@ fun PlayerScreen(
                 )
             }
 
-            // 点赞
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.ThumbUp,
-                    contentDescription = "点赞",
-                    tint = PlayerTextMuted,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = formatCount(track?.likeCount ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerTextMuted
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            // 评论
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.ModeComment,
-                    contentDescription = "评论",
-                    tint = PlayerTextMuted,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = formatCount(track?.commentCount ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerTextMuted
-                )
-            }
+            // 此处原本为点赞/评论统计数，因 API 未提供相关数据，暂时隐藏以保持界面整洁。
             Spacer(modifier = Modifier.width(8.dp))
             // 更多：分享当前视频
             val moreContext = LocalContext.current
