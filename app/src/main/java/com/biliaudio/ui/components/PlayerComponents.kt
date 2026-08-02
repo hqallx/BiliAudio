@@ -973,7 +973,7 @@ private fun SleepTimerSheet(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CommentBottomSheet(
     comments: List<com.biliaudio.data.model.ReplyItem>,
@@ -981,14 +981,18 @@ private fun CommentBottomSheet(
     onDismiss: () -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = "评论 (${'$'}{comments.size})",
+                    text = "评论 (${comments.size})",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -1001,19 +1005,20 @@ private fun CommentBottomSheet(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("暂无评论", style = MaterialTheme.typography.bodyMedium)
+                    Text("暂无评论")
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(items = comments) { comment ->
-                        Row(
+                    items(comments.size) { index ->
+                        val comment = comments[index]
+                        androidx.compose.foundation.layout.Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AsyncImage(
+                            coil.compose.AsyncImage(
                                 model = comment.member?.avatar,
                                 contentDescription = null,
                                 modifier = Modifier
@@ -1021,7 +1026,7 @@ private fun CommentBottomSheet(
                                     .clip(CircleShape)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = comment.member?.uname ?: "",
                                     style = MaterialTheme.typography.bodySmall,
@@ -1030,15 +1035,14 @@ private fun CommentBottomSheet(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = comment.content?.message ?: "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
                     }
                 }
             }
-            Row(
+            androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1060,7 +1064,7 @@ private fun CommentBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
-                    viewModel.sendComment(inputText)
+                    onSendMessage(inputText)
                     inputText = ""
                 }) {
                     Icon(
