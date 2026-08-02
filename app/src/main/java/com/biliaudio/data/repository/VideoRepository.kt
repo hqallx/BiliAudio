@@ -11,6 +11,7 @@ import com.biliaudio.data.model.VideoItem
 import com.biliaudio.data.model.VideoStat
 import com.biliaudio.data.model.VideoStreamResponse
 import com.biliaudio.data.network.BiliApi
+import com.biliaudio.data.network.BiliCookieJar
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.resultOf
 import com.biliaudio.data.toHttpsUrl
@@ -28,7 +29,8 @@ import javax.inject.Singleton
 @Singleton
 class VideoRepository @Inject constructor(
     private val api: BiliApi,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val cookieJar: BiliCookieJar
 ) {
 
     private val cache = LinkedHashMap<String, CacheEntry>()
@@ -284,13 +286,15 @@ class VideoRepository @Inject constructor(
 
     /**
      * 点赞/取消点赞视频。
+     * 参考 BBPlayer：使用 bvid 而非 aid，csrf 从 cookieJar 直接获取。
+     * @param bvid 视频 BV 号
      * @param like 1=点赞，2=取消点赞
      */
-    suspend fun likeVideo(aid: Long, like: Int): Result<ApiActionResponse> {
-        val csrf = preferencesManager.csrfToken.first()
+    suspend fun likeVideo(bvid: String, like: Int): Result<ApiActionResponse> {
+        val csrf = cookieJar.store.getCsrfToken() ?: ""
         if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
         return try {
-            Result.Success(api.likeVideo(aid, like, csrf))
+            Result.Success(api.likeVideo(bvid, like, csrf))
         } catch (e: Exception) {
             Result.Error(e, e.message ?: "未知错误")
         }
@@ -298,9 +302,10 @@ class VideoRepository @Inject constructor(
 
     /**
      * 发送视频评论。
+     * csrf 从 cookieJar 直接获取（bili_jct cookie）。
      */
     suspend fun sendComment(aid: Long, message: String): Result<ApiActionResponse> {
-        val csrf = preferencesManager.csrfToken.first()
+        val csrf = cookieJar.store.getCsrfToken() ?: ""
         if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
         return try {
             Result.Success(api.addComment(oid = aid, type = 1, message = message, csrf = csrf))

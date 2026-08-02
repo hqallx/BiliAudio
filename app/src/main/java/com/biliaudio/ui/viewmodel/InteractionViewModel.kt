@@ -55,7 +55,7 @@ class InteractionViewModel @Inject constructor(
     fun toggleLike() {
         viewModelScope.launch {
             val likeAction = if (_isLiked.value) 2 else 1
-            when (val result = videoRepository.likeVideo(currentAid, likeAction)) {
+            when (val result = videoRepository.likeVideo(currentBvid, likeAction)) {
                 is Result.Success -> {
                     if (result.data.code == 0) {
                         _isLiked.value = !_isLiked.value

@@ -134,11 +134,17 @@ interface BiliApi {
         @Query("ps") ps: Int = 20
     ): ReplyListResponse
 
-    /** 点赞视频（按 B站接口规范调用） */
+    /**
+     * 点赞/取消点赞视频。
+     * 参考 BBPlayer：使用 bvid 而非 aid，接口 x/web-interface/archive/like。
+     * @param bvid 视频 BV 号
+     * @param like 1=点赞，2=取消点赞
+     * @param csrf CSRF token（bili_jct cookie 值）
+     */
     @FormUrlEncoded
-    @POST("x/web-interface/like")
+    @POST("x/web-interface/archive/like")
     suspend fun likeVideo(
-        @Field("aid") aid: Long,
+        @Field("bvid") bvid: String,
         @Field("like") like: Int,
         @Field("csrf") csrf: String
     ): ApiActionResponse
