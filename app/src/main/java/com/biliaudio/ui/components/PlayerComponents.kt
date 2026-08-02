@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +34,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -46,6 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -192,6 +193,16 @@ fun PlayerScreen(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showCommentSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
+    var showMoreSheet by remember { mutableStateOf(false) }
+
+    // 当曲目变化时，加载视频互动数据（点赞数、评论数、是否已点赞）
+    LaunchedEffect(track?.bvid, track?.aid) {
+        val bvid = track?.bvid
+        val aid = track?.aid ?: 0L
+        if (!bvid.isNullOrEmpty() && aid > 0) {
+            interactionViewModel.loadVideoData(bvid, aid)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -377,30 +388,8 @@ fun PlayerScreen(
                 color = PlayerTextMuted
             )
             Spacer(modifier = Modifier.width(8.dp))
-            // 更多：分享当前视频
-            val moreContext = LocalContext.current
-            IconButton(onClick = {
-                val bvid = track?.bvid
-                val aid = track?.aid ?: 0L
-                val url = if (!bvid.isNullOrEmpty()) {
-                    "https://www.bilibili.com/video/$bvid"
-                } else if (aid > 0) {
-                    "https://www.bilibili.com/video/av$aid"
-                } else null
-                if (url != null) {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}\n$url")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    moreContext.startActivity(
-                        Intent.createChooser(shareIntent, "分享视频")
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                } else {
-                    android.widget.Toast.makeText(moreContext, "当前无可用视频信息", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }) {
+            // 更多：弹出底部菜单
+            IconButton(onClick = { showMoreSheet = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "更多",
@@ -617,6 +606,14 @@ fun PlayerScreen(
                 showSleepSheet = false
             },
             onDismiss = { showSleepSheet = false }
+        )
+    }
+
+    // ===== 更多操作 BottomSheet =====
+    if (showMoreSheet) {
+        MoreActionBottomSheet(
+            track = track,
+            onDismiss = { showMoreSheet = false }
         )
     }
 }
@@ -1075,5 +1072,94 @@ private fun CommentBottomSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * 更多操作底部弹层（参考音乐 App 风格）。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MoreActionBottomSheet(
+    track: Track?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp)
+        ) {
+            // 标题
+            Text(
+                text = track?.title ?: "未知曲目",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+
+            // 分享
+            MoreActionItem(
+                icon = Icons.Default.Share,
+                title = "分享",
+                onClick = {
+                    val bvid = track?.bvid
+                    val aid = track?.aid ?: 0L
+                    val url = if (!bvid.isNullOrEmpty()) {
+                        "https://www.bilibili.com/video/$bvid"
+                    } else if (aid > 0) {
+                        "https://www.bilibili.com/video/av$aid"
+                    } else null
+                    if (url != null) {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}\n$url")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "分享视频")
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } else {
+                        android.widget.Toast.makeText(context, "当前无可用视频信息", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    onDismiss()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun MoreActionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
