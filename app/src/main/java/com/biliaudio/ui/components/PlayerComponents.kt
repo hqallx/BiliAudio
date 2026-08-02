@@ -67,6 +67,7 @@ import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import com.biliaudio.ui.viewmodel.InteractionViewModel
+import com.biliaudio.ui.viewmodel.LyricsViewModel
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.text.input.ImeAction
@@ -283,6 +284,7 @@ fun PlayerScreen(
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize()
                 )
+                } // end if showLyrics else
                 if (isLoading && playbackError == null) {
                     Box(
                         modifier = Modifier
