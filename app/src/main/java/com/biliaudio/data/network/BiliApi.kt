@@ -173,5 +173,18 @@ interface BiliApi {
      * 获取字幕/歌词内容（从 subtitle URL 直接下载）。
      */
     @GET
+    /** 获取稍后再看列表 */
+    @GET("x/v2/history/toview")
+    suspend fun getToViewList(@Query("platform") platform: String = "web"): BiliResponse<ToViewResponse>
+
+    /** 删除稍后再看条目 */
+    @FormUrlEncoded
+    @POST("x/v2/history/toview/del")
+    suspend fun deleteToViewItem(@Field("aid") aid: Long, @Field("csrf") csrf: String): ApiActionResponse
+
+    /** 批量删除收藏夹视频 */
+    @FormUrlEncoded
+    @POST("x/v3/fav/resource/batch-del")
+    suspend fun batchDeleteFavResources(@Field("resources") resources: String, @Field("media_id") mediaId: Long, @Field("platform") platform: String = "web", @Field("csrf") csrf: String): ApiActionResponse
     suspend fun getSubtitleJson(@Url url: String): kotlinx.serialization.json.JsonElement
 }

@@ -627,3 +627,26 @@ data class SubtitleLine(
     val to: Double = 0.0,
     val content: String = ""
 )
+
+// ============ 稍后再看 ============
+@Serializable
+data class ToViewResponse(
+    val list: List<ToViewItem> = emptyList(),
+    val count: Int = 0
+)
+
+@Serializable
+data class ToViewItem(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val title: String = "",
+    val pic: String = "",
+    val duration: Int = 0,
+    val progress: Int = 0,
+    val cid: Long = 0
+) {
+    fun toVideoItem(): VideoItem = VideoItem(
+        id = aid, aid = aid, bvid = bvid, title = title,
+        cover = pic, duration = duration, cid = cid
+    )
+}
