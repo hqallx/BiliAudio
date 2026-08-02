@@ -634,7 +634,7 @@ private fun PlaylistBottomSheet(
     onClearPlaylist: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    androidx.compose.material3.ModalBottomSheet(
+    androidx.compose.material3.androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
@@ -978,7 +978,6 @@ private fun SleepTimerSheet(
 private fun CommentBottomSheet(
     comments: List<com.biliaudio.data.model.ReplyItem>,
     onSendMessage: (String) -> Unit,
-    viewModel: InteractionViewModel,
     onDismiss: () -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -1049,10 +1048,12 @@ private fun CommentBottomSheet(
                     placeholder = { Text("发送一条评论...") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                         onSend = {
-                            viewModel.sendComment(inputText)
+                            onSendMessage(inputText)
                             inputText = ""
                         }
                     )
