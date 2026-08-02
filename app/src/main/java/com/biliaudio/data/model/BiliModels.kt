@@ -584,3 +584,46 @@ data class ReplyMember(
     val uname: String = "",
     val avatar: String = ""
 )
+
+// ============ 歌词/字幕相关 ============
+
+/**
+ * /x/player/wbi/v2 返回的播放器信息。
+ * 主要用于获取字幕（歌词）地址。
+ */
+@Serializable
+data class WebPlayerInfoResponse(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val cid: Long = 0,
+    val subtitle: SubtitleInfo? = null
+)
+
+@Serializable
+data class SubtitleInfo(
+    val subtitles: List<SubtitleItem> = emptyList()
+)
+
+@Serializable
+data class SubtitleItem(
+    @SerialName("subtitle_url")
+    val subtitleUrl: String = "",
+    val lan: String = "",
+    @SerialName("lan_doc")
+    val lanDoc: String = ""
+)
+
+/**
+ * 字幕 JSON 格式：{ body: [ { from, to, content }, ... ] }
+ */
+@Serializable
+data class SubtitleBody(
+    val body: List<SubtitleLine> = emptyList()
+)
+
+@Serializable
+data class SubtitleLine(
+    val from: Double = 0.0,
+    val to: Double = 0.0,
+    val content: String = ""
+)

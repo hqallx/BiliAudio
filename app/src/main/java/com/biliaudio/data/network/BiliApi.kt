@@ -6,6 +6,7 @@ import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 interface BiliApi {
 
@@ -158,4 +159,19 @@ interface BiliApi {
         @Field("message") message: String,
         @Field("csrf") csrf: String
     ): ApiActionResponse
+    /**
+     * 获取播放器信息（含字幕/歌词地址）。
+     * 参考 BBPlayer: /x/player/wbi/v2
+     */
+    @GET("x/player/wbi/v2")
+    suspend fun getWebPlayerInfo(
+        @Query("bvid") bvid: String = "",
+        @Query("cid") cid: Long = 0
+    ): BiliResponse<WebPlayerInfoResponse>
+
+    /**
+     * 获取字幕/歌词内容（从 subtitle URL 直接下载）。
+     */
+    @GET
+    suspend fun getSubtitleJson(@Url url: String): kotlinx.serialization.json.JsonElement
 }
