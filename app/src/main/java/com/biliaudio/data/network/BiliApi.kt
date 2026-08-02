@@ -171,6 +171,21 @@ interface BiliApi {
 
     /**
      * 获取字幕/歌词内容（从 subtitle URL 直接下载）。
+    /** 搜索视频（需WBI签名） */
+    @GET("x/web-interface/wbi/search/type")
+    suspend fun searchVideos(@Query("keyword") keyword: String, @Query("search_type") type: String = "video", @Query("page") page: Int = 1): BiliResponse<SearchVideoResponse>
+
+    /** 搜索UP主（需WBI签名） */
+    @GET("x/web-interface/wbi/search/type")
+    suspend fun searchUsers(@Query("keyword") keyword: String, @Query("search_type") type: String = "bili_user", @Query("page") page: Int = 1): BiliResponse<SearchUserResponse>
+
+    /** 热门搜索 */
+    @GET("x/web-interface/search/square")
+    suspend fun getHotSearches(@Query("limit") limit: Int = 10): BiliResponse<HotSearchResponse>
+
+    /** 搜索建议 */
+    @GET("https://s.search.bilibili.com/main/suggest")
+    suspend fun getSearchSuggestions(@Query("term") term: String, @Query("main_ver") ver: String = "v1"): kotlinx.serialization.json.JsonElement
      */
     @GET
     /** 获取稍后再看列表 */

@@ -650,3 +650,59 @@ data class ToViewItem(
         cover = pic, duration = duration, cid = cid
     )
 }
+
+// ============ 搜索相关 ============
+@Serializable
+data class SearchVideoResponse(
+    val result: List<SearchVideoItem> = emptyList(),
+    @SerialName("numPages")
+    val numPages: Int = 1
+)
+
+@Serializable
+data class SearchVideoItem(
+    val bvid: String = "",
+    val aid: Long = 0,
+    val title: String = "",
+    val pic: String = "",
+    val duration: String = "0:00",
+    val author: String = "",
+    val play: Long = 0,
+    val description: String = ""
+)
+
+@Serializable
+data class SearchUserResponse(
+    val result: List<SearchUserItem> = emptyList(),
+    @SerialName("numPages")
+    val numPages: Int = 1
+)
+
+@Serializable
+data class SearchUserItem(
+    val mid: Long = 0,
+    val uname: String = "",
+    val upic: String = "",
+    val sign: String = "",
+    @SerialName("usign")
+    val usign: String = "",
+    val fans: Long = 0,
+    val videos: Int = 0
+)
+
+@Serializable
+data class HotSearchResponse(
+    val trending: HotSearchTrending? = null
+)
+
+@Serializable
+data class HotSearchTrending(
+    val list: List<HotSearchItem> = emptyList()
+)
+
+@Serializable
+data class HotSearchItem(
+    val keyword: String = "",
+    @SerialName("icon")
+    val icon: String = ""
+)
