@@ -195,6 +195,7 @@ fun PlayerScreen(
     var showCommentSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
 
     // 当曲目变化时，加载视频互动数据（点赞数、评论数、是否已点赞）
     LaunchedEffect(track?.bvid, track?.aid) {
