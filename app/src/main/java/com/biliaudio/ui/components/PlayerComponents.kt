@@ -634,7 +634,7 @@ private fun PlaylistBottomSheet(
     onClearPlaylist: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    androidx.compose.material3.androidx.compose.material3.ModalBottomSheet(
+    androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
