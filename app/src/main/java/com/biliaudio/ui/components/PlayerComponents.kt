@@ -3,6 +3,7 @@ package com.biliaudio.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -33,18 +35,19 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +66,14 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
+import com.biliaudio.ui.viewmodel.InteractionViewModel
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material3.OutlinedTextField
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.collectAsState
+import android.content.Intent
 import com.biliaudio.ui.theme.AppColors
 import java.util.concurrent.TimeUnit
 
@@ -158,6 +169,7 @@ fun PlayerScreen(
     playbackSpeed: Float,
     sleepTimerMinutes: Int,
     isLoading: Boolean,
+    isRetrying: Boolean,
     playbackError: String?,
     playlist: List<Track>,
     currentIndex: Int,
@@ -175,16 +187,33 @@ fun PlayerScreen(
     onClearPlaylist: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    interactionViewModel: InteractionViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     var showPlaylistSheet by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
+    var showCommentSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
+    var showMoreSheet by remember { mutableStateOf(false) }
+
+    // 当曲目变化时，加载视频互动数据（点赞数、评论数、是否已点赞）
+    LaunchedEffect(track?.bvid, track?.aid) {
+        val bvid = track?.bvid
+        val aid = track?.aid ?: 0L
+        if (!bvid.isNullOrEmpty() && aid > 0) {
+            interactionViewModel.loadVideoData(bvid, aid)
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBg)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {} // 消费触摸事件，阻止点击穿透到下层
+            )
     ) {
         // 背景：视频封面模糊填充（铺满整屏）
         if (!track?.coverUrl.isNullOrEmpty()) {
@@ -264,7 +293,7 @@ fun PlayerScreen(
                             androidx.compose.material3.CircularProgressIndicator(color = Color.White)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "正在加载...",
+                                text = if (isRetrying) "正在重试..." else "正在加载...",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White
                             )
@@ -292,7 +321,15 @@ fun PlayerScreen(
                                     containerColor = PlayerAccent
                                 )
                             ) {
-                                Text(text = "重试", color = Color.White)
+                                if (isRetrying) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(text = "重试", color = Color.White)
+                                }
                             }
                         }
                     }
@@ -326,43 +363,39 @@ fun PlayerScreen(
                 )
             }
 
-            // 点赞
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // 点赞 (App 内原生接口)
+            IconButton(onClick = { interactionViewModel.toggleLike() }) {
+                val liked = interactionViewModel.isLiked.collectAsState().value
                 Icon(
-                    imageVector = Icons.Default.ThumbUp,
+                    imageVector = if (liked) Icons.Filled.ThumbUp else Icons.Default.ThumbUp,
                     contentDescription = "点赞",
-                    tint = PlayerTextMuted,
+                    tint = if (liked) PlayerAccent else PlayerTextMuted,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = formatCount(track?.likeCount ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerTextMuted
-                )
             }
+            Text(
+                text = formatCount(interactionViewModel.stat.collectAsState().value?.like ?: 0),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerTextMuted
+            )
             Spacer(modifier = Modifier.width(12.dp))
-            // 评论
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // 评论入口
+            IconButton(onClick = { showCommentSheet = true }) {
                 Icon(
                     imageVector = Icons.Outlined.ModeComment,
                     contentDescription = "评论",
                     tint = PlayerTextMuted,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = formatCount(track?.commentCount ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerTextMuted
-                )
             }
+            Text(
+                text = formatCount(interactionViewModel.stat.collectAsState().value?.reply ?: 0),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerTextMuted
+            )
             Spacer(modifier = Modifier.width(8.dp))
-            // 更多
-            val moreContext = LocalContext.current
-            IconButton(onClick = {
-                android.widget.Toast.makeText(moreContext, "功能开发中", android.widget.Toast.LENGTH_SHORT).show()
-            }) {
+            // 更多：弹出底部菜单
+            IconButton(onClick = { showMoreSheet = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "更多",
@@ -564,6 +597,13 @@ fun PlayerScreen(
     }
 
     // ===== 睡眠定时器 BottomSheet =====
+    if (showCommentSheet) {
+        CommentBottomSheet(
+            comments = interactionViewModel.comments.collectAsState().value,
+            onSendMessage = { msg -> interactionViewModel.sendComment(msg) },
+            onDismiss = { showCommentSheet = false }
+        )
+    }
     if (showSleepSheet) {
         SleepTimerSheet(
             currentMinutes = sleepTimerMinutes,
@@ -572,6 +612,14 @@ fun PlayerScreen(
                 showSleepSheet = false
             },
             onDismiss = { showSleepSheet = false }
+        )
+    }
+
+    // ===== 更多操作 BottomSheet =====
+    if (showMoreSheet) {
+        MoreActionBottomSheet(
+            track = track,
+            onDismiss = { showMoreSheet = false }
         )
     }
 }
@@ -924,5 +972,200 @@ private fun SleepTimerSheet(
                 }
             }
         }
+    }
+}
+
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun CommentBottomSheet(
+    comments: List<com.biliaudio.data.model.ReplyItem>,
+    onSendMessage: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var inputText by remember { mutableStateOf("") }
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "评论 (${comments.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = null)
+                }
+            }
+            if (comments.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("暂无评论")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(comments.size) { index ->
+                        val comment = comments[index]
+                        androidx.compose.foundation.layout.Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = comment.member?.avatar,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = comment.member?.uname ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppColors.AccentPink
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = comment.content?.message ?: "",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("发送一条评论...") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSend = {
+                            onSendMessage(inputText)
+                            inputText = ""
+                        }
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = {
+                    onSendMessage(inputText)
+                    inputText = ""
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "发送",
+                        tint = AppColors.AccentPink
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 更多操作底部弹层（参考音乐 App 风格）。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MoreActionBottomSheet(
+    track: Track?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp)
+        ) {
+            // 标题
+            Text(
+                text = track?.title ?: "未知曲目",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+
+            // 分享
+            MoreActionItem(
+                icon = Icons.Default.Share,
+                title = "分享",
+                onClick = {
+                    val bvid = track?.bvid
+                    val aid = track?.aid ?: 0L
+                    val url = if (!bvid.isNullOrEmpty()) {
+                        "https://www.bilibili.com/video/$bvid"
+                    } else if (aid > 0) {
+                        "https://www.bilibili.com/video/av$aid"
+                    } else null
+                    if (url != null) {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "${track?.title} - ${track?.artist}\n$url")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "分享视频")
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } else {
+                        android.widget.Toast.makeText(context, "当前无可用视频信息", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    onDismiss()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun MoreActionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }

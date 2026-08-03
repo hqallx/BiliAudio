@@ -5,9 +5,13 @@ import com.biliaudio.data.Result
 import com.biliaudio.data.model.BiliResponse
 import com.biliaudio.data.model.DashData
 import com.biliaudio.data.model.Track
+import com.biliaudio.data.model.ApiActionResponse
+import com.biliaudio.data.model.ReplyListResponse
 import com.biliaudio.data.model.VideoItem
+import com.biliaudio.data.model.VideoStat
 import com.biliaudio.data.model.VideoStreamResponse
 import com.biliaudio.data.network.BiliApi
+import com.biliaudio.data.network.BiliCookieJar
 import com.biliaudio.data.preferences.PreferencesManager
 import com.biliaudio.data.resultOf
 import com.biliaudio.data.toHttpsUrl
@@ -25,7 +29,8 @@ import javax.inject.Singleton
 @Singleton
 class VideoRepository @Inject constructor(
     private val api: BiliApi,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val cookieJar: BiliCookieJar
 ) {
 
     private val cache = LinkedHashMap<String, CacheEntry>()
@@ -254,6 +259,60 @@ class VideoRepository @Inject constructor(
         cacheMutex.withLock { cache.clear() }
     }
 
+    // ============ 互动：点赞 & 评论 ============
+
+    /**
+     * 获取视频统计信息（点赞数、评论数等）。
+     * 通过 view 接口拿到 stat 字段，比单独调接口更节省请求。
+     */
+    suspend fun fetchVideoStat(bvid: String): VideoStat? {
+        val result = resultOf { api.getVideoInfo(bvid = bvid) }
+        if (result is Result.Success) {
+            return result.data.data?.stat
+        }
+        return null
+    }
+
+    /**
+     * 获取评论列表。
+     */
+    suspend fun fetchComments(aid: Long, page: Int = 1): Result<ReplyListResponse> {
+        return try {
+            Result.Success(api.getComments(oid = aid, type = 1, pn = page, ps = 20))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
+    }
+
+    /**
+     * 点赞/取消点赞视频。
+     * 参考 BBPlayer：使用 bvid 而非 aid，csrf 从 cookieJar 直接获取。
+     * @param bvid 视频 BV 号
+     * @param like 1=点赞，2=取消点赞
+     */
+    suspend fun likeVideo(bvid: String, like: Int): Result<ApiActionResponse> {
+        val csrf = cookieJar.store.getCsrfToken() ?: ""
+        if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
+        return try {
+            Result.Success(api.likeVideo(bvid, like, csrf))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
+    }
+
+    /**
+     * 发送视频评论。
+     * csrf 从 cookieJar 直接获取（bili_jct cookie）。
+     */
+    suspend fun sendComment(aid: Long, message: String): Result<ApiActionResponse> {
+        val csrf = cookieJar.store.getCsrfToken() ?: ""
+        if (csrf.isEmpty()) return Result.Error(Exception("未登录"), "请先登录")
+        return try {
+            Result.Success(api.addComment(oid = aid, type = 1, message = message, csrf = csrf))
+        } catch (e: Exception) {
+            Result.Error(e, e.message ?: "未知错误")
+        }
+    }
     private data class CacheEntry(
         val url: String,
         val timestamp: Long

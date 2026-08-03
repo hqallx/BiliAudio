@@ -31,6 +31,7 @@ class PlayerViewModel @Inject constructor(
     val playbackSpeed: StateFlow<Float> = playbackManager.playbackSpeed
     val sleepTimerMinutes: StateFlow<Int> = playbackManager.sleepTimerMinutes
     val isLoading: StateFlow<Boolean> = playbackManager.isLoading
+    val isRetrying: StateFlow<Boolean> = playbackManager.isRetrying
     val playbackError: StateFlow<String?> = playbackManager.playbackError
 
     private var progressJob: Job? = null

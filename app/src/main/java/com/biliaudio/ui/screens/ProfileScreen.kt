@@ -1,5 +1,6 @@
 package com.biliaudio.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -95,6 +97,7 @@ fun ProfileScreen(
     val settingsToast by settingsViewModel.toast.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var showDebugLog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -195,7 +198,7 @@ fun ProfileScreen(
                 SettingsItemRow(
                     icon = Icons.Default.Info,
                     title = "关于",
-                    onClick = { settingsViewModel.toast("功能开发中") }
+                    onClick = { showAboutDialog = true }
                 )
             }
 
@@ -289,6 +292,12 @@ fun ProfileScreen(
         if (showDebugLog) {
             DebugLogDialog(
                 onDismiss = { showDebugLog = false }
+            )
+        }
+
+        if (showAboutDialog) {
+            AboutDialog(
+                onDismiss = { showAboutDialog = false }
             )
         }
     }
@@ -524,6 +533,43 @@ private fun DebugLogDialog(onDismiss: () -> Unit) {
                         }
                     }
                 }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val version = try {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    } catch (e: Exception) { "1.0" }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("关于 BiliAudio") },
+        text = {
+            Column {
+                Text("BiliAudio v$version", style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(12.scaled()))
+                Text("一个用于将B站视频作为音频播放的 Android 应用。", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(12.scaled()))
+                Text("GitHub 仓库:", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "hqallx/BiliBiliAudio",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.AccentBlue,
+                    modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/hqallx/BiliBiliAudio"))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                )
             }
         },
         confirmButton = {

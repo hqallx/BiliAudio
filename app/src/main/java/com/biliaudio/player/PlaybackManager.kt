@@ -89,9 +89,24 @@ class PlaybackManager @Inject constructor(
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError
 
+    /** 自动重试相关状态 */
+    private var retryCount = 0
+    private val maxRetryCount = 3
+    private var retryJob: Job? = null
+
+    /** 是否正在自动重试中（UI 据此显示"正在重试..."而非"正在加载..."） */
+    private val _isRetrying = MutableStateFlow(false)
+    val isRetrying: StateFlow<Boolean> = _isRetrying
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             _isPlaying.value = playing
+            // 成功开始播放时重置重试计数与重试态
+            if (playing) {
+                retryCount = 0
+                _isRetrying.value = false
+                retryJob?.cancel()
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -104,8 +119,23 @@ class PlaybackManager @Inject constructor(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _playbackError.value = friendlyErrorMessage(error)
             _isLoading.value = false
+            // 自动重试逻辑：最多重试 maxRetryCount 次，每次间隔 2 秒
+            if (retryCount < maxRetryCount) {
+                retryCount++
+                _isRetrying.value = true
+                _playbackError.value = friendlyErrorMessage(error, retryCount)
+                retryJob?.cancel()
+                retryJob = serviceScope.launch {
+                    delay(2000L)
+                    mediaController?.prepare()
+                    mediaController?.play()
+                }
+            } else {
+                // 重试耗尽：保留手动重试入口，给出更明确提示
+                _isRetrying.value = false
+                _playbackError.value = friendlyErrorMessage(error, maxRetryCount, isFinal = true)
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -115,8 +145,11 @@ class PlaybackManager @Inject constructor(
             if (index >= 0 && index < _playlist.value.size) {
                 _currentTrack.value = _playlist.value[index]
             }
-            // 切换曲目时清除上一首的错误态
+            // 切换曲目时清除上一首的错误态与重试计数
             _playbackError.value = null
+            retryCount = 0
+            _isRetrying.value = false
+            retryJob?.cancel()
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
@@ -129,16 +162,30 @@ class PlaybackManager @Inject constructor(
         }
     }
 
-    private fun friendlyErrorMessage(error: PlaybackException): String {
+    /**
+     * 生成友好的错误提示，可选附带重试次数或最终状态提示。
+     * @param attempt 当前重试次数（1-based），不传则表示首次错误（非自动重试场景）
+     * @param isFinal 是否已耗尽重试次数
+     */
+    private fun friendlyErrorMessage(
+        error: PlaybackException,
+        attempt: Int = 0,
+        isFinal: Boolean = false
+    ): String {
         // 懒解析失败的消息在 cause.message 里（被 ExoPlayer 包装成 Source error）
         val cause = error.cause
         val causeMsg = cause?.message ?: ""
-        return when {
+        val baseMsg = when {
             error.message?.contains("解析音频地址") == true ||
-                causeMsg.contains("解析音频地址") -> "音频地址解析失败，请重试"
-            causeMsg.contains("超时") -> "解析超时，请检查网络后重试"
-            cause is java.io.IOException -> "网络加载失败，请检查网络后重试"
-            else -> "播放失败，请重试"
+                causeMsg.contains("解析音频地址") -> "音频地址解析失败"
+            causeMsg.contains("超时") -> "解析超时"
+            cause is java.io.IOException -> "网络加载失败"
+            else -> "播放失败"
+        }
+        return when {
+            isFinal -> "$baseMsg（已重试 $maxRetryCount 次），请检查网络后手动重试"
+            attempt > 0 -> "$baseMsg，正在自动重试($attempt/$maxRetryCount)..."
+            else -> "$baseMsg，请重试"
         }
     }
 
@@ -178,6 +225,7 @@ class PlaybackManager @Inject constructor(
     }
 
     fun releaseController() {
+        retryJob?.cancel()
         mediaController?.removeListener(playerListener)
         mediaController?.release()
         mediaController = null
@@ -449,6 +497,9 @@ class PlaybackManager @Inject constructor(
      */
     fun retry() {
         _playbackError.value = null
+        retryCount = 0
+        _isRetrying.value = false
+        retryJob?.cancel()
         val controller = mediaController ?: return
         controller.prepare()
         controller.play()

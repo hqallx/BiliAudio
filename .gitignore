@@ -86,3 +86,7 @@ lint-results*.html
 
 # Android Profiling
 *.hprof
+
+# Operit temp files
+.operit/
+.backup/

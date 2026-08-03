@@ -45,19 +45,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(cookieJar: BiliCookieJar): OkHttpClient {
+    fun provideOkHttpClient(): OkHttpClient {
         return NetworkModule.provideOkHttpClient()
     }
 
     @Provides
     @Singleton
-    fun provideBiliApi(client: OkHttpClient): BiliApi {
+    fun provideBiliApi(): BiliApi {
         return NetworkModule.provideBiliApi()
     }
 
     @Provides
     @Singleton
-    fun provideBiliPassportApi(client: OkHttpClient): BiliPassportApi {
+    fun provideBiliPassportApi(): BiliPassportApi {
         return NetworkModule.providePassportApi()
     }
 }
