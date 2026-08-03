@@ -28,26 +28,11 @@ class CookieInterceptor @Inject constructor(
         val newRequest = if (cookieHeader.isNotEmpty()) {
             request.newBuilder()
                 .header("Cookie", cookieHeader)
-                .header("User-Agent", DEFAULT_UA)
-                .header("Referer", "https://www.bilibili.com/")
-                .header("Origin", "https://www.bilibili.com")
                 .build()
         } else {
-            request.newBuilder()
-                .header("User-Agent", DEFAULT_UA)
-                .header("Referer", "https://www.bilibili.com/")
-                .header("Origin", "https://www.bilibili.com")
-                .build()
+            request
         }
 
         return chain.proceed(newRequest)
-    }
-
-    companion object {
-        // 与 BBPlayer 一致的 User-Agent
-        private const val DEFAULT_UA =
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0_1 like Mac OS X) " +
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) " +
-            "Mobile/15E148 BiliApp/6.66.0"
     }
 }
