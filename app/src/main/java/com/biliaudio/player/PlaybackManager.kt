@@ -8,6 +8,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.model.Track
 import com.biliaudio.data.preferences.PreferencesManager
 import com.google.common.util.concurrent.MoreExecutors
@@ -98,6 +99,14 @@ class PlaybackManager @Inject constructor(
     private val _isRetrying = MutableStateFlow(false)
     val isRetrying: StateFlow<Boolean> = _isRetrying
 
+    /** 轻量瞬时提示（如切歌到边界），不阻塞播放、不显示重试按钮。供 UI 用 Snackbar 展示。 */
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast
+
+    fun consumeToast() {
+        _toast.value = null
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             _isPlaying.value = playing
@@ -132,9 +141,19 @@ class PlaybackManager @Inject constructor(
                     mediaController?.play()
                 }
             } else {
-                // 重试耗尽：保留手动重试入口，给出更明确提示
+                // 重试耗尽：尝试自动跳下一首，避免连续失效曲目（如视频被删/下架）卡住播放。
+                // transition 回调会清错误态并重置 retryCount，下一首失效会再次进入本逻辑，自然链式跳过。
                 _isRetrying.value = false
-                _playbackError.value = friendlyErrorMessage(error, maxRetryCount, isFinal = true)
+                val controller = mediaController
+                if (controller != null &&
+                    _repeatMode.value != RepeatMode.ONE &&
+                    controller.hasNextMediaItem()
+                ) {
+                    controller.seekToNextMediaItem()
+                } else {
+                    // 最后一首/单曲循环：保留手动重试入口，给出更明确提示
+                    _playbackError.value = friendlyErrorMessage(error, maxRetryCount, isFinal = true)
+                }
             }
         }
 
@@ -218,7 +237,9 @@ class PlaybackManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                // MediaController 连接失败不应导致应用崩溃
+                // MediaController 连接失败不应导致应用崩溃，但需告知用户而非静默无响应。
+                _playbackError.value = "播放服务连接失败，请重试"
+                _isLoading.value = false
                 e.printStackTrace()
             }
         }, MoreExecutors.directExecutor())
@@ -253,11 +274,30 @@ class PlaybackManager @Inject constructor(
     }
 
     fun next() {
-        mediaController?.seekToNextMediaItem()
+        val controller = mediaController
+        if (controller == null) {
+            _playbackError.value = "播放服务未就绪"
+            return
+        }
+        if (controller.hasNextMediaItem()) {
+            controller.seekToNextMediaItem()
+        } else {
+            // 已是最后一首：循环模式由 ExoPlayer 处理，非循环时轻量提示而非静默无反应。
+            _toast.value = "已经是最后一首了"
+        }
     }
 
     fun previous() {
-        mediaController?.seekToPreviousMediaItem()
+        val controller = mediaController
+        if (controller == null) {
+            _playbackError.value = "播放服务未就绪"
+            return
+        }
+        if (controller.hasPreviousMediaItem()) {
+            controller.seekToPreviousMediaItem()
+        } else {
+            _toast.value = "已经是第一首了"
+        }
     }
 
     /**
@@ -373,10 +413,13 @@ class PlaybackManager @Inject constructor(
 
     /**
      * 设置播放倍速。ExoPlayer 原生支持 playbackSpeed。
-     * @param speed 倍速值，范围 0.25f ~ 3.0f
+     * @param speed 倍速值，范围 [BiliConstants.Player.PLAYBACK_SPEED_MIN] ~ [BiliConstants.Player.PLAYBACK_SPEED_MAX]
      */
     fun setPlaybackSpeed(speed: Float) {
-        val safeSpeed = speed.coerceIn(0.25f, 3.0f)
+        val safeSpeed = speed.coerceIn(
+            BiliConstants.Player.PLAYBACK_SPEED_MIN,
+            BiliConstants.Player.PLAYBACK_SPEED_MAX
+        )
         _playbackSpeed.value = safeSpeed
         mediaController?.setPlaybackSpeed(safeSpeed)
     }
@@ -503,6 +546,25 @@ class PlaybackManager @Inject constructor(
         val controller = mediaController ?: return
         controller.prepare()
         controller.play()
+    }
+
+    /**
+     * 跳过当前失效曲目并播放下一首。
+     * 用于永久失效（视频被删/下架）场景——retry 无效时用户可主动跳过。
+     * 到最后一首时跳过后停止并提示。
+     */
+    fun skipCurrent() {
+        _playbackError.value = null
+        val controller = mediaController
+        if (controller == null) {
+            _toast.value = "播放服务未就绪"
+            return
+        }
+        if (controller.hasNextMediaItem()) {
+            controller.seekToNextMediaItem()
+        } else {
+            _toast.value = "没有下一首了"
+        }
     }
 
     /**

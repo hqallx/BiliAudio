@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
@@ -57,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.biliaudio.ui.components.FolderCard
+import com.biliaudio.ui.components.ListEmptyState
+import com.biliaudio.ui.components.ListErrorState
+import com.biliaudio.ui.components.ListLoadingState
 import com.biliaudio.ui.components.VideoCard
 import com.biliaudio.ui.components.formatDurationMinSec
 import com.biliaudio.ui.viewmodel.AuthViewModel
@@ -263,15 +265,15 @@ private fun FavoritesTab(
     onFolderClick: (Long, String) -> Unit
 ) {
     if (isLoading && folders.isEmpty()) {
-        LoadingBox()
+        ListLoadingState()
         return
     }
     if (error != null && folders.isEmpty()) {
-        ErrorState(message = error, onRetry = onRetry)
+        ListErrorState(message = error, onRetry = onRetry)
         return
     }
     if (folders.isEmpty()) {
-        EmptyState(icon = Icons.Default.Folder, text = "暂无收藏夹")
+        ListEmptyState(icon = Icons.Default.Folder, text = "暂无收藏夹")
         return
     }
     LazyVerticalGrid(
@@ -303,15 +305,15 @@ private fun SeasonsTab(
     onSeasonClick: (Long, String, Boolean) -> Unit
 ) {
     if (isLoading && seasons.isEmpty()) {
-        LoadingBox()
+        ListLoadingState()
         return
     }
     if (error != null && seasons.isEmpty()) {
-        ErrorState(message = error, onRetry = onRetry)
+        ListErrorState(message = error, onRetry = onRetry)
         return
     }
     if (seasons.isEmpty()) {
-        EmptyState(icon = Icons.Default.LibraryBooks, text = "暂无合集")
+        ListEmptyState(icon = Icons.Default.LibraryBooks, text = "暂无合集")
         return
     }
     val gridState = rememberLazyGridState()
@@ -369,15 +371,15 @@ private fun HistoryTab(
     onPlay: (com.biliaudio.data.model.HistoryItem) -> Unit
 ) {
     if (isLoading && history.isEmpty()) {
-        LoadingBox()
+        ListLoadingState()
         return
     }
     if (error != null && history.isEmpty()) {
-        ErrorState(message = error, onRetry = onRetry)
+        ListErrorState(message = error, onRetry = onRetry)
         return
     }
     if (history.isEmpty()) {
-        EmptyState(icon = Icons.Default.History, text = "暂无播放历史")
+        ListEmptyState(icon = Icons.Default.History, text = "暂无播放历史")
         return
     }
     val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
@@ -427,79 +429,6 @@ private fun HistoryTab(
 }
 
 @Composable
-private fun LoadingBox() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun EmptyState(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/**
- * 错误态：展示错误信息 + 重试按钮。
- * 与 VideoListScreen 的错误态保持视觉一致（CloudOff 图标 + 文案 + 重试）。
- */
-@Composable
-private fun ErrorState(
-    message: String,
-    onRetry: () -> Unit
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.CloudOff,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onRetry) {
-                Text("重试")
-            }
-        }
-    }
-}
-
-@Composable
 private fun PlaylistTab(
     playlist: List<com.biliaudio.data.model.Track>,
     currentTrack: com.biliaudio.data.model.Track?,
@@ -509,7 +438,7 @@ private fun PlaylistTab(
     onClear: () -> Unit
 ) {
     if (playlist.isEmpty()) {
-        EmptyState(icon = Icons.Default.QueueMusic, text = "播放列表为空")
+        ListEmptyState(icon = Icons.Default.QueueMusic, text = "播放列表为空")
         return
     }
     Column(modifier = Modifier.fillMaxSize()) {

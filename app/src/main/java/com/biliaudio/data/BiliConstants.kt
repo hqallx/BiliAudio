@@ -59,4 +59,17 @@ object BiliConstants {
         const val SCHEME = "biliaudio"
         const val HOST = "resolve"
     }
+
+    /**
+     * 播放器相关常量：倍速档位/上下限、睡眠定时器选项、进度持久化节拍。
+     * 倍速上下限需与 [PLAYBACK_SPEEDS] 范围一致，避免 UI 选不到的值被内部设置。
+     */
+    object Player {
+        val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        const val PLAYBACK_SPEED_MIN = 0.5f
+        const val PLAYBACK_SPEED_MAX = 2.0f
+        const val SPEED_EQUALITY_EPSILON = 0.01f
+        val SLEEP_TIMER_OPTIONS_MINUTES = listOf(0, 15, 30, 45, 60, 90)
+        const val PROGRESS_SAVE_INTERVAL_TICKS = 10
+    }
 }

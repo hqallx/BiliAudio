@@ -33,6 +33,9 @@ class PlayerViewModel @Inject constructor(
     val isLoading: StateFlow<Boolean> = playbackManager.isLoading
     val isRetrying: StateFlow<Boolean> = playbackManager.isRetrying
     val playbackError: StateFlow<String?> = playbackManager.playbackError
+    val toast: StateFlow<String?> = playbackManager.toast
+
+    fun consumeToast() = playbackManager.consumeToast()
 
     private var progressJob: Job? = null
 
@@ -42,9 +45,9 @@ class PlayerViewModel @Inject constructor(
             var saveCounter = 0
             while (true) {
                 playbackManager.updateProgress()
-                // 每 ~5 秒持久化一次播放位置（PROGRESS_UPDATE_INTERVAL_MS=500ms × 10）
+                // 每 ~5 秒持久化一次播放位置（PROGRESS_UPDATE_INTERVAL_MS × PROGRESS_SAVE_INTERVAL_TICKS）
                 // 避免每 500ms 写盘，同时保证进程被杀时最多丢失 5 秒进度
-                if (++saveCounter >= 10) {
+                if (++saveCounter >= BiliConstants.Player.PROGRESS_SAVE_INTERVAL_TICKS) {
                     saveCounter = 0
                     playbackManager.savePlaybackState()
                 }
@@ -92,6 +95,7 @@ class PlayerViewModel @Inject constructor(
     fun startSleepTimer(minutes: Int) = playbackManager.startSleepTimer(minutes)
     fun cancelSleepTimer() = playbackManager.cancelSleepTimer()
     fun retry() = playbackManager.retry()
+    fun skipCurrent() = playbackManager.skipCurrent()
 
     override fun onCleared() {
         super.onCleared()

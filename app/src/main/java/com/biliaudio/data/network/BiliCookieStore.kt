@@ -111,7 +111,7 @@ class BiliCookieStore(context: Context) {
     @Synchronized
     fun ensureBuvid3() {
         val current = getCookieMap()
-        if (current.containsKey("buvid3") && current["buvid3"]!!.isNotEmpty()) return
+        if (!current["buvid3"].isNullOrEmpty()) return
 
         val buvid3 = prefs.getString(KEY_BUVID3, null) ?: run {
             val generated = UUID.randomUUID().toString().uppercase()

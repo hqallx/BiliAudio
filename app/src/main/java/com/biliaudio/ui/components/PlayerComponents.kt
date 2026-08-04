@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.ModeComment
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -45,7 +44,10 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +66,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.biliaudio.data.BiliConstants
 import com.biliaudio.data.model.Track
 import com.biliaudio.player.RepeatMode
 import com.biliaudio.ui.viewmodel.InteractionViewModel
@@ -77,15 +80,23 @@ import android.content.Intent
 import com.biliaudio.ui.theme.AppColors
 import java.util.concurrent.TimeUnit
 
-// ====== 深色播放器色板（参考网易云/B站暗色播放器） ======
-private val DarkBg = Color(0xFF2C2C2C)
-private val DarkSurface = Color(0xFF3D3D3D)
+// ====== 沉浸式播放器色板（参考网易云/B站暗色播放器） ======
+// PlayerScreen 始终渲染在「模糊封面 + 深色遮罩」之上，是一块与系统主题无关的
+// 沉浸式深色表面（参考主流音乐 App）。因此文字/轨道颜色固定为浅色以保证在深色
+// 遮罩上的可读性，不能跟随 MaterialTheme.colorScheme（否则浅色主题下 onSurface
+// 为深色，在深色遮罩上不可见）。仅点缀色走主题以保持品牌一致。
+private val DarkBg = Color(0xFF2C2C2C)            // 无封面时的兜底背景
+private val DarkSurface = Color(0xFF3D3D3D)        // Chip 容器（与暗色 surfaceContainerHighest 对齐）
 private val PlayerTextPrimary = Color(0xFFFFFFFF)
 private val PlayerTextSecondary = Color(0xFFAAAAAA)
 private val PlayerTextMuted = Color(0xFF888888)
 private val PlayerAccent: Color @Composable get() = AppColors.AccentPink   // B站粉（点赞高亮，与主题统一）
-private val PlayerTrackBg = Color(0xFF555555)     // 未播放灰条
-private val PlayerTrackPlayed = Color(0xFFFFFFFF) // 已播放白条
+private val PlayerTrackBg = Color(0xFF555555)      // 未播放灰条
+private val PlayerTrackPlayed = Color(0xFFFFFFFF)  // 已播放白条
+// 封面之上的半透明遮罩 alpha，确保前景文字清晰可读
+private const val ScrimAlphaStrong = 0x99 // 错误态/标题区遮罩（更暗）
+private const val ScrimAlphaMedium = 0x88 // 错误态遮罩
+private const val ScrimAlphaLight = 0x66  // 加载态遮罩
 
 /** 格式化大数字：>1万显示 x.x万 */
 private fun formatCount(count: Long): String = when {
@@ -171,6 +182,7 @@ fun PlayerScreen(
     isLoading: Boolean,
     isRetrying: Boolean,
     playbackError: String?,
+    toast: String?,
     playlist: List<Track>,
     currentIndex: Int,
     onPlayPause: () -> Unit,
@@ -186,6 +198,8 @@ fun PlayerScreen(
     onRemoveFromPlaylist: (Int) -> Unit,
     onClearPlaylist: () -> Unit,
     onRetry: () -> Unit,
+    onSkipCurrent: () -> Unit,
+    onConsumeToast: () -> Unit,
     onDismiss: () -> Unit,
     interactionViewModel: InteractionViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
@@ -202,6 +216,16 @@ fun PlayerScreen(
         val aid = track?.aid ?: 0L
         if (!bvid.isNullOrEmpty() && aid > 0) {
             interactionViewModel.loadVideoData(bvid, aid)
+        }
+    }
+
+    // 播放器自带 Snackbar：PlayerScreen 是覆盖在 Scaffold 之上的全屏浮层，
+    // 全局 SnackbarHost 被遮挡，故内部维护一个用于展示切歌边界等轻量提示。
+    val playerSnackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(toast) {
+        toast?.let {
+            playerSnackbarHostState.showSnackbar(it)
+            onConsumeToast()
         }
     }
 
@@ -229,7 +253,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0x99000000))
+                    .background(Color(ScrimAlphaStrong shl 24))
             )
         }
 
@@ -286,7 +310,7 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0x66000000)),
+                            .background(Color(ScrimAlphaLight shl 24)),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -304,7 +328,7 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0x88000000)),
+                            .background(Color(ScrimAlphaMedium shl 24)),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -315,20 +339,26 @@ fun PlayerScreen(
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            androidx.compose.material3.Button(
-                                onClick = onRetry,
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = PlayerAccent
-                                )
-                            ) {
-                                if (isRetrying) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                androidx.compose.material3.Button(
+                                    onClick = onRetry,
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = PlayerAccent
                                     )
-                                } else {
-                                    Text(text = "重试", color = Color.White)
+                                ) {
+                                    if (isRetrying) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text(text = "重试", color = Color.White)
+                                    }
+                                }
+                                // 跳过：用于永久失效曲目（视频被删/下架），retry 无效时主动跳下一首。
+                                TextButton(onClick = onSkipCurrent) {
+                                    Text(text = "跳过", color = PlayerTextSecondary)
                                 }
                             }
                         }
@@ -570,6 +600,11 @@ fun PlayerScreen(
             }
         }
     }
+        // Snackbar 浮层：置于内容之上、底部，展示切歌边界等轻量提示
+        SnackbarHost(
+            hostState = playerSnackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     } // Box end
 
     // ===== 播放列表 BottomSheet =====
@@ -696,7 +731,7 @@ private fun PlaylistBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 itemsIndexed(playlist) { index, track ->
-                    PlaylistSheetItem(
+                    PlaylistItemRow(
                         track = track,
                         isPlaying = index == currentIndex,
                         onPlayClick = { onPlayAt(index) },
@@ -704,57 +739,6 @@ private fun PlaylistBottomSheet(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistSheetItem(
-    track: Track,
-    isPlaying: Boolean,
-    onPlayClick: () -> Unit,
-    onRemoveClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onPlayClick() }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AsyncImage(
-            model = track.coverUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (isPlaying) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = track.artist,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        IconButton(onClick = onRemoveClick) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "移除",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -777,11 +761,8 @@ private fun LinearProgressBar(
     var draggingValue by remember { mutableStateOf<Float?>(null) }
 
     val safeDuration = duration.coerceAtLeast(1L)
-    val progressRaw = if (draggingValue != null) {
-        draggingValue!!
-    } else {
-        (currentPosition.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
-    }
+    val progressRaw = draggingValue
+        ?: (currentPosition.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
     val progress = progressRaw.coerceIn(0f, 1f)
 
     Canvas(
@@ -871,7 +852,7 @@ private fun SpeedPickerSheet(
     onPick: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    val speeds = BiliConstants.Player.PLAYBACK_SPEEDS
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
@@ -890,7 +871,8 @@ private fun SpeedPickerSheet(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             speeds.forEach { speed ->
-                val selected = kotlin.math.abs(speed - currentSpeed) < 0.01f
+                val selected = kotlin.math.abs(speed - currentSpeed) <
+                    BiliConstants.Player.SPEED_EQUALITY_EPSILON
                 androidx.compose.material3.FilterChip(
                     selected = selected,
                     onClick = { onPick(speed) },
@@ -915,7 +897,7 @@ private fun SleepTimerSheet(
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val options = listOf(0, 15, 30, 45, 60, 90)
+    val options = BiliConstants.Player.SLEEP_TIMER_OPTIONS_MINUTES
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface

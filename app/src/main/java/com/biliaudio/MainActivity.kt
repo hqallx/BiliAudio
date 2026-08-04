@@ -103,6 +103,7 @@ fun AppRoot(
     val isPlayerLoading by playerViewModel.isLoading.collectAsStateWithLifecycle()
     val isPlayerRetrying by playerViewModel.isRetrying.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playbackError.collectAsStateWithLifecycle()
+    val playerToast by playerViewModel.toast.collectAsStateWithLifecycle()
     val playlist by playerViewModel.playlist.collectAsStateWithLifecycle()
     val currentIndex by playerViewModel.currentIndex.collectAsStateWithLifecycle()
 
@@ -329,6 +330,7 @@ fun AppRoot(
             isLoading = isPlayerLoading,
             isRetrying = isPlayerRetrying,
             playbackError = playerError,
+            toast = playerToast,
             playlist = playlist,
             currentIndex = currentIndex,
             onPlayPause = { playerViewModel.togglePlayPause() },
@@ -344,6 +346,8 @@ fun AppRoot(
             onRemoveFromPlaylist = { index -> playerViewModel.removeFromPlaylist(index) },
             onClearPlaylist = { playerViewModel.clearPlaylist() },
             onRetry = { playerViewModel.retry() },
+            onSkipCurrent = { playerViewModel.skipCurrent() },
+            onConsumeToast = { playerViewModel.consumeToast() },
             onDismiss = { showPlayer = false }
         )
     }

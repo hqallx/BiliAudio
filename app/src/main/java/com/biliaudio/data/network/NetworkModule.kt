@@ -42,15 +42,11 @@ object NetworkModule {
         }
     }
 
-    fun provideCookieJar(): BiliCookieJar {
+    fun provideCookieJar(): BiliCookieJar =
         checkNotNull(cookieJar) { "NetworkModule.init() must be called first" }
-        return cookieJar!!
-    }
 
-    fun provideWbiSigner(): WbiSigner {
+    fun provideWbiSigner(): WbiSigner =
         checkNotNull(wbiSigner) { "NetworkModule.init() must be called first" }
-        return wbiSigner!!
-    }
 
     fun provideOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -90,35 +86,27 @@ object NetworkModule {
         coerceInputValues = true
     }
 
-    fun provideBiliApi(): BiliApi {
-        api?.let { return it }
-        synchronized(this) {
-            api ?: run {
-                val contentType = "application/json; charset=utf-8".toMediaType()
-                api = Retrofit.Builder()
-                    .baseUrl(BiliConstants.BASE_URL)
-                    .client(provideOkHttpClient())
-                    .addConverterFactory(json.asConverterFactory(contentType))
-                    .build()
-                    .create(BiliApi::class.java)
-            }
-        }
-        return api!!
+    fun provideBiliApi(): BiliApi = api ?: synchronized(this) {
+        api ?: run {
+            val contentType = "application/json; charset=utf-8".toMediaType()
+            Retrofit.Builder()
+                .baseUrl(BiliConstants.BASE_URL)
+                .client(provideOkHttpClient())
+                .addConverterFactory(json.asConverterFactory(contentType))
+                .build()
+                .create(BiliApi::class.java)
+        }.also { api = it }
     }
 
-    fun providePassportApi(): BiliPassportApi {
-        passportApi?.let { return it }
-        synchronized(this) {
-            passportApi ?: run {
-                val contentType = "application/json; charset=utf-8".toMediaType()
-                passportApi = Retrofit.Builder()
-                    .baseUrl(BiliConstants.PASSPORT_BASE_URL)
-                    .client(provideOkHttpClient())
-                    .addConverterFactory(json.asConverterFactory(contentType))
-                    .build()
-                    .create(BiliPassportApi::class.java)
-            }
-        }
-        return passportApi!!
+    fun providePassportApi(): BiliPassportApi = passportApi ?: synchronized(this) {
+        passportApi ?: run {
+            val contentType = "application/json; charset=utf-8".toMediaType()
+            Retrofit.Builder()
+                .baseUrl(BiliConstants.PASSPORT_BASE_URL)
+                .client(provideOkHttpClient())
+                .addConverterFactory(json.asConverterFactory(contentType))
+                .build()
+                .create(BiliPassportApi::class.java)
+        }.also { passportApi = it }
     }
 }
