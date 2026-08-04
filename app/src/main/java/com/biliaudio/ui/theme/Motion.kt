@@ -8,7 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.material3.ripple
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -76,7 +76,7 @@ fun Modifier.pressBounce(
         }
         .clickable(
             interactionSource = interactionSource,
-            indication = ripple(),
+            indication = rememberRipple(),
             enabled = enabled,
             onClick = onClick
         )
