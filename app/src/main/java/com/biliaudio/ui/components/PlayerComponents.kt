@@ -1,5 +1,8 @@
 package com.biliaudio.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,6 +81,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.collectAsState
 import android.content.Intent
 import com.biliaudio.ui.theme.AppColors
+import com.biliaudio.ui.theme.Motion
+import com.biliaudio.ui.theme.pressBounce
 import java.util.concurrent.TimeUnit
 
 // ====== 沉浸式播放器色板（参考网易云/B站暗色播放器） ======
@@ -534,21 +539,27 @@ fun PlayerScreen(
                 )
             }
 
-            // 大圆形播放/暂停按钮
+            // 大圆形播放/暂停按钮：按下时轻微缩放，图标 Crossfade 切换
             Box(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(CircleShape)
                     .background(PlayerTextPrimary)
-                    .clickable { onPlayPause() },
+                    .pressBounce(pressedScale = 0.9f) { onPlayPause() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "暂停" else "播放",
-                    tint = DarkBg,
-                    modifier = Modifier.size(36.dp)
-                )
+                Crossfade(
+                    targetState = isPlaying,
+                    animationSpec = tween(Motion.DurationShort, easing = Motion.EasingStandard),
+                    label = "playPauseIcon"
+                ) { playing ->
+                    Icon(
+                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "暂停" else "播放",
+                        tint = DarkBg,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
             }
 
             IconButton(
@@ -566,6 +577,19 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 循环/随机激活态颜色平滑过渡
+        val accent = PlayerAccent
+        val repeatTint by animateColorAsState(
+            targetValue = if (repeatMode != RepeatMode.NONE) accent else PlayerTextMuted,
+            animationSpec = tween(Motion.DurationShort, easing = Motion.EasingStandard),
+            label = "repeatTint"
+        )
+        val shuffleTint by animateColorAsState(
+            targetValue = if (isShuffle) accent else PlayerTextMuted,
+            animationSpec = tween(Motion.DurationShort, easing = Motion.EasingStandard),
+            label = "shuffleTint"
+        )
+
         // ===== 底部副控制：循环 / 随机 / 列表 =====
         Row(
             modifier = Modifier
@@ -581,14 +605,14 @@ fun PlayerScreen(
                     else
                         Icons.Default.Repeat,
                     contentDescription = "循环模式",
-                    tint = if (repeatMode != RepeatMode.NONE) PlayerAccent else PlayerTextMuted
+                    tint = repeatTint
                 )
             }
             IconButton(onClick = { onToggleShuffle() }) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "随机播放",
-                    tint = if (isShuffle) PlayerAccent else PlayerTextMuted
+                    tint = shuffleTint
                 )
             }
             IconButton(onClick = { showPlaylistSheet = true }) {

@@ -1,5 +1,7 @@
 package com.biliaudio.ui.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.biliaudio.ui.components.GeeTestDialog
+import com.biliaudio.ui.theme.Motion
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.LoginStatus
 import com.biliaudio.ui.viewmodel.SmsLoginStep
@@ -176,20 +179,27 @@ fun LoginScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 )
             ) {
-                when (selectedTab) {
-                    LoginTab.QrCode -> QrCodeContent(
-                        loginStatus = loginStatus,
-                        qrCodeUrl = qrCodeUrl,
-                        onGenerate = { authViewModel.generateQrCode() },
-                        onRefresh = { authViewModel.refreshQrCode() }
-                    )
-                    LoginTab.Sms -> SmsContent(
-                        step = smsStep,
-                        countdown = smsCountdown,
-                        onSendCode = { cid, tel -> authViewModel.startSmsLogin(cid, tel) },
-                        onLogin = { code -> authViewModel.loginWithSmsCode(code) },
-                        onReset = { authViewModel.resetSmsLogin() }
-                    )
+                // Tab 内容切换：Crossfade 淡入淡出
+                Crossfade(
+                    targetState = selectedTab,
+                    animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingStandard),
+                    label = "loginTab"
+                ) { tab ->
+                    when (tab) {
+                        LoginTab.QrCode -> QrCodeContent(
+                            loginStatus = loginStatus,
+                            qrCodeUrl = qrCodeUrl,
+                            onGenerate = { authViewModel.generateQrCode() },
+                            onRefresh = { authViewModel.refreshQrCode() }
+                        )
+                        LoginTab.Sms -> SmsContent(
+                            step = smsStep,
+                            countdown = smsCountdown,
+                            onSendCode = { cid, tel -> authViewModel.startSmsLogin(cid, tel) },
+                            onLogin = { code -> authViewModel.loginWithSmsCode(code) },
+                            onReset = { authViewModel.resetSmsLogin() }
+                        )
+                    }
                 }
             }
 

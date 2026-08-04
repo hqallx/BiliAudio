@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.biliaudio.data.model.UserInfo
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.theme.AppColors
+import com.biliaudio.ui.theme.pressBounce
 import com.biliaudio.ui.viewmodel.SettingsViewModel
 
 /** 文字底色与页面背景一致，避免出现白色底 */
@@ -325,7 +326,7 @@ private fun SettingsItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .pressBounce { onClick() }
             .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -363,7 +364,7 @@ private fun SwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+            .pressBounce { onCheckedChange(!checked) }
             .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -402,7 +403,7 @@ private fun AccountRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .pressBounce { onClick() }
             .padding(horizontal = 16.scaled(), vertical = 18.scaled()),
         verticalAlignment = Alignment.CenterVertically
     ) {

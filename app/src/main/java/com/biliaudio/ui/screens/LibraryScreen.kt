@@ -1,5 +1,7 @@
 package com.biliaudio.ui.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +63,7 @@ import com.biliaudio.ui.components.ListErrorState
 import com.biliaudio.ui.components.ListLoadingState
 import com.biliaudio.ui.components.VideoCard
 import com.biliaudio.ui.components.formatDurationMinSec
+import com.biliaudio.ui.theme.Motion
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
@@ -208,49 +211,56 @@ fun LibraryScreen(
                 }
             }
 
-            when (selectedTab) {
-                LibraryTab.Favorites -> FavoritesTab(
-                    folders = folders,
-                    isLoading = isLoadingFolders,
-                    error = foldersError,
-                    onRetry = { favoriteViewModel.retryFolders() },
-                    onFolderClick = onFolderClick
-                )
-                LibraryTab.Seasons -> SeasonsTab(
-                    seasons = seasons,
-                    isLoading = isLoadingSeasons,
-                    error = seasonsError,
-                    onRetry = { favoriteViewModel.retrySeasons() },
-                    hasMore = seasonsHasMore,
-                    isLoadingMore = isLoadingMoreSeasons,
-                    onLoadMore = { favoriteViewModel.loadMoreSeasons() },
-                    onSeasonClick = onSeasonClick
-                )
-                LibraryTab.History -> HistoryTab(
-                    history = history,
-                    isLoading = isLoadingHistory,
-                    error = historyError,
-                    onRetry = { favoriteViewModel.retryHistory() },
-                    hasMore = historyHasMore,
-                    isLoadingMore = isLoadingMoreHistory,
-                    onLoadMore = { favoriteViewModel.loadMoreHistory() },
-                    onPlay = { item ->
-                        // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
-                        // playOrAdd 统一去重：与收藏夹/合集列表点击行为一致，避免重复条目。
-                        val track = favoriteViewModel.historyItemToLazyTrack(item)
-                        if (track != null) {
-                            playerViewModel.playOrAdd(track)
+            // Tab 内容切换：Crossfade 淡入淡出，避免瞬时替换的生硬感
+            Crossfade(
+                targetState = selectedTab,
+                animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingStandard),
+                label = "libraryTab"
+            ) { tab ->
+                when (tab) {
+                    LibraryTab.Favorites -> FavoritesTab(
+                        folders = folders,
+                        isLoading = isLoadingFolders,
+                        error = foldersError,
+                        onRetry = { favoriteViewModel.retryFolders() },
+                        onFolderClick = onFolderClick
+                    )
+                    LibraryTab.Seasons -> SeasonsTab(
+                        seasons = seasons,
+                        isLoading = isLoadingSeasons,
+                        error = seasonsError,
+                        onRetry = { favoriteViewModel.retrySeasons() },
+                        hasMore = seasonsHasMore,
+                        isLoadingMore = isLoadingMoreSeasons,
+                        onLoadMore = { favoriteViewModel.loadMoreSeasons() },
+                        onSeasonClick = onSeasonClick
+                    )
+                    LibraryTab.History -> HistoryTab(
+                        history = history,
+                        isLoading = isLoadingHistory,
+                        error = historyError,
+                        onRetry = { favoriteViewModel.retryHistory() },
+                        hasMore = historyHasMore,
+                        isLoadingMore = isLoadingMoreHistory,
+                        onLoadMore = { favoriteViewModel.loadMoreHistory() },
+                        onPlay = { item ->
+                            // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                            // playOrAdd 统一去重：与收藏夹/合集列表点击行为一致，避免重复条目。
+                            val track = favoriteViewModel.historyItemToLazyTrack(item)
+                            if (track != null) {
+                                playerViewModel.playOrAdd(track)
+                            }
                         }
-                    }
-                )
-                LibraryTab.Playlist -> PlaylistTab(
-                    playlist = playlist,
-                    currentTrack = currentTrack,
-                    currentIndex = currentIndex,
-                    onPlayAt = { index -> playerViewModel.playAt(index) },
-                    onRemove = { index -> playerViewModel.removeFromPlaylist(index) },
-                    onClear = { playerViewModel.clearPlaylist() }
-                )
+                    )
+                    LibraryTab.Playlist -> PlaylistTab(
+                        playlist = playlist,
+                        currentTrack = currentTrack,
+                        currentIndex = currentIndex,
+                        onPlayAt = { index -> playerViewModel.playAt(index) },
+                        onRemove = { index -> playerViewModel.removeFromPlaylist(index) },
+                        onClear = { playerViewModel.clearPlaylist() }
+                    )
+                }
             }
         }
     }

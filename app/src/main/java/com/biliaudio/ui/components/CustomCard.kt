@@ -1,7 +1,8 @@
 package com.biliaudio.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,8 @@ import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import com.biliaudio.data.model.Track
+import com.biliaudio.ui.theme.Motion
+import com.biliaudio.ui.theme.pressBounce
 
 @Composable
 fun VideoCard(
@@ -57,7 +60,7 @@ fun VideoCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .pressBounce { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -190,7 +193,7 @@ fun FolderCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .pressBounce { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -244,11 +247,18 @@ fun PlaylistItemRow(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 当前播放曲目标题颜色平滑过渡，避免瞬时跳变
+    val titleColor by animateColorAsState(
+        targetValue = if (isPlaying) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurface,
+        animationSpec = tween(Motion.DurationShort, easing = Motion.EasingStandard),
+        label = "playlistItemTitle"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onPlayClick() }
+            .pressBounce { onPlayClick() }
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -266,8 +276,7 @@ fun PlaylistItemRow(
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = if (isPlaying) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
+                color = titleColor
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(

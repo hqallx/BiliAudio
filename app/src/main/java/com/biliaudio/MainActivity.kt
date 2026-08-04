@@ -10,6 +10,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +61,7 @@ import com.biliaudio.ui.screens.ProfileScreen
 import com.biliaudio.ui.screens.VideoListScreen
 import com.biliaudio.ui.screens.VideoListSource
 import com.biliaudio.ui.theme.BiliAudioTheme
+import com.biliaudio.ui.theme.Motion
 import com.biliaudio.ui.viewmodel.AuthViewModel
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
@@ -199,7 +208,20 @@ fun AppRoot(
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (showMiniPlayer) {
+                // MiniPlayer 显隐：从底部滑入 + 淡入，克制不抢戏
+                AnimatedVisibility(
+                    visible = showMiniPlayer,
+                    enter = slideInVertically(
+                        animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingEmphasizedDecel)
+                    ) { fullHeight -> fullHeight } + fadeIn(
+                        animationSpec = tween(Motion.DurationMedium)
+                    ),
+                    exit = slideOutVertically(
+                        animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingEmphasizedAccel)
+                    ) { fullHeight -> fullHeight } + fadeOut(
+                        animationSpec = tween(Motion.DurationMedium)
+                    )
+                ) {
                     MiniPlayer(
                         track = currentTrack,
                         isPlaying = isPlaying,
@@ -245,7 +267,41 @@ fun AppRoot(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = if (isLoggedIn) "library" else "login"
+                startDestination = if (isLoggedIn) "library" else "login",
+                // 页面转场：克制、现代，符合 M3。
+                // - 进入二级页（收藏夹/合集视频列表）：从右侧滑入 1/4 屏宽 + 淡入
+                // - 主 Tab 间切换 / 登录：淡入淡出
+                // - 返回二级页：向右滑出 + 淡出
+                enterTransition = {
+                    val route = targetState.destination.route
+                    if (route != null && (route.startsWith("videos") || route.startsWith("season"))) {
+                        slideInHorizontally(
+                            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedDecel)
+                        ) { fullWidth -> fullWidth / 4 } + fadeIn(
+                            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedDecel)
+                        )
+                    } else {
+                        fadeIn(animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingEmphasizedDecel))
+                    }
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingEmphasizedAccel))
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingEmphasizedDecel))
+                },
+                popExitTransition = {
+                    val route = initialState.destination.route
+                    if (route != null && (route.startsWith("videos") || route.startsWith("season"))) {
+                        slideOutHorizontally(
+                            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedAccel)
+                        ) { fullWidth -> fullWidth / 4 } + fadeOut(
+                            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedAccel)
+                        )
+                    } else {
+                        fadeOut(animationSpec = tween(Motion.DurationMedium))
+                    }
+                }
             ) {
                 composable("login") {
                     LoginScreen(
@@ -317,7 +373,20 @@ fun AppRoot(
         }
     }
 
-    if (showPlayer && currentTrack != null) {
+    // 全屏播放器：从底部整屏滑入，覆盖所有内容
+    AnimatedVisibility(
+        visible = showPlayer && currentTrack != null,
+        enter = slideInVertically(
+            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedDecel)
+        ) { fullHeight -> fullHeight } + fadeIn(
+            animationSpec = tween(Motion.DurationLong)
+        ),
+        exit = slideOutVertically(
+            animationSpec = tween(Motion.DurationLong, easing = Motion.EasingEmphasizedAccel)
+        ) { fullHeight -> fullHeight } + fadeOut(
+            animationSpec = tween(Motion.DurationLong)
+        )
+    ) {
         PlayerScreen(
             track = currentTrack,
             isPlaying = isPlaying,

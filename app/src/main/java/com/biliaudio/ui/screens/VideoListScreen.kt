@@ -1,5 +1,7 @@
 package com.biliaudio.ui.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,11 +44,15 @@ import com.biliaudio.ui.components.ListErrorState
 import com.biliaudio.ui.components.ListLoadingState
 import com.biliaudio.ui.components.VideoCard
 import com.biliaudio.ui.components.formatDurationMinSec
+import com.biliaudio.ui.theme.Motion
 import com.biliaudio.ui.viewmodel.FavoriteViewModel
 import com.biliaudio.ui.viewmodel.PlayerViewModel
 
 /** 视频列表的数据来源，区分收藏夹与合集/系列。 */
 enum class VideoListSource { FAVORITE, SEASON }
+
+/** 列表四态，用于驱动 Crossfade 过渡。 */
+private enum class ListPhase { Loading, Error, Empty, Content }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,62 +152,72 @@ fun VideoListScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (isLoading && videos.isEmpty()) {
-                ListLoadingState()
-            } else if (videosError != null && videos.isEmpty()) {
-                // 错误状态：复用共享错误态封装（CloudOff 图标 + 文案 + 重试）
-                ListErrorState(
-                    message = videosError ?: "加载失败",
-                    onRetry = {
-                        when (source) {
-                            VideoListSource.FAVORITE -> favoriteViewModel.loadVideos(folderId)
-                            VideoListSource.SEASON -> favoriteViewModel.loadSeasonOrSeriesVideosAuto(folderId, isSeries)
-                        }
-                    }
-                )
-            } else if (videos.isEmpty()) {
-                ListEmptyState(
-                    icon = Icons.Default.PlayArrow,
-                    text = if (query.isEmpty()) "收藏夹为空" else "无匹配结果"
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = 8.dp,
-                        bottom = 88.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(videos) { video ->
-                        VideoCard(
-                            title = video.title,
-                            artist = video.upper?.name ?: "Unknown",
-                            coverUrl = video.cover,
-                            duration = formatDurationMinSec(video.duration),
-                            onClick = {
-                                // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
-                                // playOrAdd 统一去重：已存在则定位播放，否则追加并播放。
-                                playerViewModel.playOrAdd(favoriteViewModel.videoToLazyTrack(video))
-                            },
-                            onAddNext = {
-                                // 下一首播放：插队到当前曲目之后
-                                playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
+            // 列表四态：用 Crossfade 在加载/错误/空/内容间细腻淡入淡出
+            val phase = when {
+                isLoading && videos.isEmpty() -> ListPhase.Loading
+                videosError != null && videos.isEmpty() -> ListPhase.Error
+                videos.isEmpty() -> ListPhase.Empty
+                else -> ListPhase.Content
+            }
+            Crossfade(
+                targetState = phase,
+                animationSpec = tween(Motion.DurationMedium, easing = Motion.EasingStandard),
+                label = "videoListPhase",
+                modifier = Modifier.fillMaxSize()
+            ) { p ->
+                when (p) {
+                    ListPhase.Loading -> ListLoadingState()
+                    ListPhase.Error -> ListErrorState(
+                        message = videosError ?: "加载失败",
+                        onRetry = {
+                            when (source) {
+                                VideoListSource.FAVORITE -> favoriteViewModel.loadVideos(folderId)
+                                VideoListSource.SEASON -> favoriteViewModel.loadSeasonOrSeriesVideosAuto(folderId, isSeries)
                             }
-                        )
-                    }
-                    // 加载更多尾部：仅在非搜索态展示，避免在过滤结果上误导用户。
-                    if (isLoadingMore && query.isBlank()) {
-                        item(key = "loading_more") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        }
+                    )
+                    ListPhase.Empty -> ListEmptyState(
+                        icon = Icons.Default.PlayArrow,
+                        text = if (query.isEmpty()) "收藏夹为空" else "无匹配结果"
+                    )
+                    ListPhase.Content -> LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = 8.dp,
+                            bottom = 88.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(videos) { video ->
+                            VideoCard(
+                                title = video.title,
+                                artist = video.upper?.name ?: "Unknown",
+                                coverUrl = video.cover,
+                                duration = formatDurationMinSec(video.duration),
+                                onClick = {
+                                    // 懒解析：瞬时创建 Track 并播放，音频地址在播放时按需解析。
+                                    // playOrAdd 统一去重：已存在则定位播放，否则追加并播放。
+                                    playerViewModel.playOrAdd(favoriteViewModel.videoToLazyTrack(video))
+                                },
+                                onAddNext = {
+                                    // 下一首播放：插队到当前曲目之后
+                                    playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
+                                }
+                            )
+                        }
+                        // 加载更多尾部：仅在非搜索态展示，避免在过滤结果上误导用户。
+                        if (isLoadingMore && query.isBlank()) {
+                            item(key = "loading_more") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                }
                             }
                         }
                     }
