@@ -10,6 +10,7 @@ import com.biliaudio.data.model.ReplyListResponse
 import com.biliaudio.data.model.VideoItem
 import com.biliaudio.data.model.VideoStat
 import com.biliaudio.data.model.VideoStreamResponse
+import com.biliaudio.data.model.VideoInfoResponse
 import com.biliaudio.data.network.BiliApi
 import com.biliaudio.data.network.BiliCookieJar
 import com.biliaudio.data.preferences.PreferencesManager
@@ -159,17 +160,20 @@ class VideoRepository @Inject constructor(
         resolveAudioUrl(bvid = video.bvid, aid = video.aid, cid = video.cid)
 
     suspend fun videoToTrack(video: VideoItem): Result<Track> {
+        // B站收藏夹接口的 medias 仅返回 id（即 avid），不返回独立 aid 字段，
+        // 反序列化后 VideoItem.aid 为 0。此处用 id 兜底，确保 aid 可用于点赞/评论接口。
+        val effectiveAid = video.aid.takeIf { it > 0 } ?: video.id
         return when (val urlResult = getAudioUrl(video)) {
             is Result.Success -> Result.Success(
                 Track(
-                    id = video.bvid.ifEmpty { video.aid.toString() },
+                    id = video.bvid.ifEmpty { effectiveAid.toString() },
                     title = video.title,
                     artist = video.upper?.name ?: "Unknown",
                     coverUrl = video.cover.toHttpsUrl(),
                     audioUrl = urlResult.data,
                     duration = video.duration.toLong() * 1000,
                     bvid = video.bvid,
-                    aid = video.aid,
+                    aid = effectiveAid,
                     cid = video.cid
                 )
             )
@@ -212,15 +216,20 @@ class VideoRepository @Inject constructor(
      * 占位 URI 编码了 bvid/aid/cid，解析时据此调用 playurl 接口。
      */
     fun videoToLazyTrack(video: VideoItem): Track {
+        // B站收藏夹接口的 medias 仅返回 id（即 avid），不返回独立 aid 字段，
+        // 反序列化后 VideoItem.aid 为 0。此处用 id 兜底，确保 aid 可用于：
+        // 1. 点赞/评论接口（需 aid 作为 oid）
+        // 2. playurl 解析（ResolvingDataSource 从占位 URI 读取 aid）
+        val effectiveAid = video.aid.takeIf { it > 0 } ?: video.id
         return Track(
-            id = video.bvid.ifEmpty { video.aid.toString() },
+            id = video.bvid.ifEmpty { effectiveAid.toString() },
             title = video.title,
             artist = video.upper?.name ?: "Unknown",
             coverUrl = video.cover.toHttpsUrl(),
-            audioUrl = buildLazyUri(video.bvid, video.aid, video.cid),
+            audioUrl = buildLazyUri(video.bvid, effectiveAid, video.cid),
             duration = video.duration.toLong() * 1000,
             bvid = video.bvid,
-            aid = video.aid,
+            aid = effectiveAid,
             cid = video.cid
         )
     }
@@ -269,6 +278,18 @@ class VideoRepository @Inject constructor(
         val result = resultOf { api.getVideoInfo(bvid = bvid) }
         if (result is Result.Success) {
             return result.data.data?.stat
+        }
+        return null
+    }
+
+    /**
+     * 获取视频信息（含 stat 与 req_user）。
+     * req_user 含当前用户是否已点赞，供播放器初始化点赞按钮状态。
+     */
+    suspend fun fetchVideoInfo(bvid: String): VideoInfoResponse? {
+        val result = resultOf { api.getVideoInfo(bvid = bvid) }
+        if (result is Result.Success) {
+            return result.data.data
         }
         return null
     }

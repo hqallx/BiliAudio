@@ -226,11 +226,19 @@ fun PlayerScreen(
 
     // 播放器自带 Snackbar：PlayerScreen 是覆盖在 Scaffold 之上的全屏浮层，
     // 全局 SnackbarHost 被遮挡，故内部维护一个用于展示切歌边界等轻量提示。
+    // 同时合并 InteractionViewModel 的 toast（点赞/评论反馈），否则用户看不到操作结果。
     val playerSnackbarHostState = remember { SnackbarHostState() }
+    val interactionToast by interactionViewModel.toast.collectAsState()
     LaunchedEffect(toast) {
         toast?.let {
             playerSnackbarHostState.showSnackbar(it)
             onConsumeToast()
+        }
+    }
+    LaunchedEffect(interactionToast) {
+        interactionToast?.let {
+            playerSnackbarHostState.showSnackbar(it)
+            interactionViewModel.consumeToast()
         }
     }
 

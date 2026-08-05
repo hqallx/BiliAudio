@@ -163,6 +163,7 @@ data class DurlItem(
 /**
  * /x/web-interface/view 返回的视频信息。
  * 主要用于获取 cid（playurl 接口的必需参数）。
+ * req_user 含当前登录用户对此视频的互动状态（是否已点赞）。
  */
 @Serializable
 data class VideoInfoResponse(
@@ -173,8 +174,23 @@ data class VideoInfoResponse(
     val pic: String = "",
     val duration: Int = 0,
     val owner: Upper? = null,
-    val stat: VideoStat? = null
+    val stat: VideoStat? = null,
+    @SerialName("req_user")
+    val reqUser: ReqUser? = null
 )
+
+/**
+ * 当前登录用户对视频的互动状态。
+ * @property like 1=已点赞，0=未点赞
+ */
+@Serializable
+data class ReqUser(
+    val like: Int = 0,
+    val coin: Int = 0,
+    val favorite: Int = 0
+) {
+    val isLiked: Boolean get() = like == 1
+}
 
 @Serializable
 data class DashData(

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.ripple.rememberRipple
@@ -53,10 +54,13 @@ object Motion {
  *
  * @param pressedScale 按下时缩放到的比例，默认 [Motion.PressedScale]。
  * @param enabled 是否启用反馈（用于禁用态点击）。
+ * @param onLongClick 长按回调，非 null 时启用长按（用于删除等操作）。
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun Modifier.pressBounce(
     pressedScale: Float = Motion.PressedScale,
     enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
@@ -69,15 +73,25 @@ fun Modifier.pressBounce(
         ),
         label = "pressBounceScale"
     )
-    this
+    val modifier = this
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
         }
-        .clickable(
+    if (onLongClick != null) {
+        modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = rememberRipple(),
+            enabled = enabled,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        modifier.clickable(
             interactionSource = interactionSource,
             indication = rememberRipple(),
             enabled = enabled,
             onClick = onClick
         )
+    }
 }

@@ -38,6 +38,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.biliaudio.ui.components.ConfirmDeleteDialog
 import com.biliaudio.ui.components.FolderCard
 import com.biliaudio.ui.components.ListEmptyState
 import com.biliaudio.ui.components.ListErrorState
@@ -103,6 +106,7 @@ fun LibraryScreen(
     val isLoadingMoreHistory by favoriteViewModel.isLoadingMoreHistory.collectAsState()
     val userInfo by authViewModel.userInfo.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val favoriteToast by favoriteViewModel.toast.collectAsState()
 
     // 播放列表数据
     val playlist by playerViewModel.playlist.collectAsState()
@@ -110,6 +114,20 @@ fun LibraryScreen(
     val currentTrack by playerViewModel.currentTrack.collectAsState()
 
     var selectedTab by remember { mutableStateOf(LibraryTab.Playlist) }
+
+    // 删除确认对话框状态：收藏夹/合集共用一个对话框槽位，
+    // pendingDelete 标记类型（null=不显示），由各 Tab 长按触发。
+    var pendingDeleteFolder by remember { mutableStateOf<com.biliaudio.data.model.FavoriteFolder?>(null) }
+    var pendingDeleteSeason by remember { mutableStateOf<com.biliaudio.data.model.SeasonMeta?>(null) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    // 收藏夹/合集删除操作的 toast 反馈统一走此 SnackbarHost
+    LaunchedEffect(favoriteToast) {
+        favoriteToast?.let {
+            snackbarHostState.showSnackbar(it)
+            favoriteViewModel.consumeToast()
+        }
+    }
 
     // 首次使用或登录成功后，FavoriteViewModel.init 可能因登录态尚未就绪而拿不到 mid，
     // 导致收藏夹/合集为空、需用户手动刷新。这里监听登录状态变化，登录后自动加载。
@@ -160,7 +178,8 @@ fun LibraryScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         if (!isLoggedIn) {
             // 未登录：所有 Tab 共用同一个登录提示页
@@ -223,7 +242,8 @@ fun LibraryScreen(
                         isLoading = isLoadingFolders,
                         error = foldersError,
                         onRetry = { favoriteViewModel.retryFolders() },
-                        onFolderClick = onFolderClick
+                        onFolderClick = onFolderClick,
+                        onFolderLongClick = { folder -> pendingDeleteFolder = folder }
                     )
                     LibraryTab.Seasons -> SeasonsTab(
                         seasons = seasons,
@@ -233,7 +253,8 @@ fun LibraryScreen(
                         hasMore = seasonsHasMore,
                         isLoadingMore = isLoadingMoreSeasons,
                         onLoadMore = { favoriteViewModel.loadMoreSeasons() },
-                        onSeasonClick = onSeasonClick
+                        onSeasonClick = onSeasonClick,
+                        onSeasonLongClick = { season -> pendingDeleteSeason = season }
                     )
                     LibraryTab.History -> HistoryTab(
                         history = history,
@@ -264,6 +285,25 @@ fun LibraryScreen(
             }
         }
     }
+
+    // ===== 删除确认对话框 =====
+    // 收藏夹与合集共用对话框槽位，互斥显示。删除为不可逆操作，需二次确认。
+    pendingDeleteFolder?.let { folder ->
+        ConfirmDeleteDialog(
+            title = "删除收藏夹",
+            message = "确定删除收藏夹「${folder.title}」吗？该操作不可恢复，夹内 ${folder.mediaCount} 个视频将一并移除。",
+            onConfirm = { favoriteViewModel.deleteFolder(folder) },
+            onDismiss = { pendingDeleteFolder = null }
+        )
+    }
+    pendingDeleteSeason?.let { season ->
+        ConfirmDeleteDialog(
+            title = "取消追更合集",
+            message = "确定取消追更「${season.name}」吗？取消后可重新搜索追更。",
+            onConfirm = { favoriteViewModel.unfollowSeason(season) },
+            onDismiss = { pendingDeleteSeason = null }
+        )
+    }
 }
 
 @Composable
@@ -272,7 +312,8 @@ private fun FavoritesTab(
     isLoading: Boolean,
     error: String?,
     onRetry: () -> Unit,
-    onFolderClick: (Long, String) -> Unit
+    onFolderClick: (Long, String) -> Unit,
+    onFolderLongClick: (com.biliaudio.data.model.FavoriteFolder) -> Unit
 ) {
     if (isLoading && folders.isEmpty()) {
         ListLoadingState()
@@ -297,7 +338,8 @@ private fun FavoritesTab(
                 title = folder.title,
                 count = folder.mediaCount,
                 coverUrl = folder.cover,
-                onClick = { onFolderClick(folder.id, folder.title) }
+                onClick = { onFolderClick(folder.id, folder.title) },
+                onLongClick = { onFolderLongClick(folder) }
             )
         }
     }
@@ -312,7 +354,8 @@ private fun SeasonsTab(
     hasMore: Boolean,
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
-    onSeasonClick: (Long, String, Boolean) -> Unit
+    onSeasonClick: (Long, String, Boolean) -> Unit,
+    onSeasonLongClick: (com.biliaudio.data.model.SeasonMeta) -> Unit
 ) {
     if (isLoading && seasons.isEmpty()) {
         ListLoadingState()
@@ -351,7 +394,8 @@ private fun SeasonsTab(
                 title = season.name,
                 count = season.total,
                 coverUrl = season.cover,
-                onClick = { onSeasonClick(season.businessId, season.name, season.isSeries) }
+                onClick = { onSeasonClick(season.businessId, season.name, season.isSeries) },
+                onLongClick = { onSeasonLongClick(season) }
             )
         }
         if (isLoadingMore) {

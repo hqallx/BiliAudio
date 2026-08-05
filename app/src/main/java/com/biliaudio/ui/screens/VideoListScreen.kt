@@ -25,6 +25,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -39,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.biliaudio.data.model.VideoItem
+import com.biliaudio.ui.components.ConfirmDeleteDialog
 import com.biliaudio.ui.components.ListEmptyState
 import com.biliaudio.ui.components.ListErrorState
 import com.biliaudio.ui.components.ListLoadingState
@@ -70,8 +74,23 @@ fun VideoListScreen(
     val videosError by favoriteViewModel.videosError.collectAsState()
     val hasMore by favoriteViewModel.videosHasMore.collectAsState()
     val isLoadingMore by favoriteViewModel.isLoadingMoreVideos.collectAsState()
+    val favoriteToast by favoriteViewModel.toast.collectAsState()
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
+
+    // 视频删除确认对话框状态：仅收藏夹来源支持删除单个视频
+    // （合集视频不属于用户收藏，无法通过 fav/resource/del 接口移除）。
+    var pendingDeleteVideo by remember { mutableStateOf<VideoItem?>(null) }
+    val canDeleteVideo = source == VideoListSource.FAVORITE
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    // 删除/加载更多失败等 toast 反馈统一走此 SnackbarHost
+    LaunchedEffect(favoriteToast) {
+        favoriteToast?.let {
+            snackbarHostState.showSnackbar(it)
+            favoriteViewModel.consumeToast()
+        }
+    }
 
     // 列表滚动状态：滑到接近底部时自动加载下一页。
     // 仅在非搜索态（query 为空）触发，避免在过滤结果上分页。
@@ -125,6 +144,7 @@ fun VideoListScreen(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (videos.isNotEmpty()) {
                 ExtendedFloatingActionButton(
@@ -204,7 +224,10 @@ fun VideoListScreen(
                                 onAddNext = {
                                     // 下一首播放：插队到当前曲目之后
                                     playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
-                                }
+                                },
+                                onLongClick = if (canDeleteVideo) {
+                                    { pendingDeleteVideo = video }
+                                } else null
                             )
                         }
                         // 加载更多尾部：仅在非搜索态展示，避免在过滤结果上误导用户。
@@ -268,10 +291,24 @@ fun VideoListScreen(
                         onAddNext = {
                             // 下一首播放：插队到当前曲目之后
                             playerViewModel.addNext(favoriteViewModel.videoToLazyTrack(video))
-                        }
+                        },
+                        onLongClick = if (canDeleteVideo) {
+                            { pendingDeleteVideo = video }
+                        } else null
                     )
                 }
             }
         }
+    }
+
+    // ===== 删除视频确认对话框 =====
+    // 从收藏夹移除单个视频（不可逆），需二次确认。
+    pendingDeleteVideo?.let { video ->
+        ConfirmDeleteDialog(
+            title = "移除视频",
+            message = "确定从收藏夹移除「${video.title}」吗？",
+            onConfirm = { favoriteViewModel.deleteVideo(video) },
+            onDismiss = { pendingDeleteVideo = null }
+        )
     }
 }

@@ -173,9 +173,13 @@ class FavoriteViewModel @Inject constructor(
     }
 
     fun loadVideos(mediaId: Long, page: Int = 1) {
+        currentVideoMediaId = mediaId
         videosLoader = { p -> loadVideosPage(mediaId, p) }
         viewModelScope.launch { loadVideosPage(mediaId, page) }
     }
+
+    /** 当前视频列表所属的收藏夹 mediaId，删除视频时需要。 */
+    private var currentVideoMediaId: Long = 0L
 
     private suspend fun loadVideosPage(mediaId: Long, page: Int) {
         val isFirstPage = page == 1
@@ -565,5 +569,98 @@ class FavoriteViewModel @Inject constructor(
             }
         }
         return mid
+    }
+
+    // ============ 删除操作 ============
+
+    /**
+     * 删除收藏夹：乐观更新（先从列表移除），失败回滚并提示。
+     */
+    fun deleteFolder(folder: FavoriteFolder) {
+        val original = _folders.value.toList()
+        _folders.value = _folders.value.filter { it.id != folder.id }
+        viewModelScope.launch {
+            when (val result = favoriteRepository.deleteFolder(folder.id)) {
+                is Result.Success -> {
+                    if (result.data.code == 0) {
+                        _toast.value = "已删除「${folder.title}」"
+                    } else {
+                        _folders.value = original
+                        _toast.value = result.data.message.ifEmpty { "删除失败" }
+                    }
+                }
+                is Result.Error -> {
+                    _folders.value = original
+                    _toast.value = result.message
+                }
+                Result.Loading -> {}
+            }
+        }
+    }
+
+    /**
+     * 删除收藏夹内单个视频：乐观更新，失败回滚。
+     * @param video 要删除的视频（VideoItem.id 即为 avid）
+     */
+    fun deleteVideo(video: VideoItem) {
+        val mediaId = currentVideoMediaId
+        if (mediaId <= 0) {
+            _toast.value = "无法删除：未知收藏夹"
+            return
+        }
+        val original = _videos.value.toList()
+        val originalFiltered = _filteredVideos.value.toList()
+        _videos.value = _videos.value.filter { it.id != video.id }
+        _filteredVideos.value = _filteredVideos.value.filter { it.id != video.id }
+        viewModelScope.launch {
+            when (val result = favoriteRepository.deleteResource(mediaId, video.id)) {
+                is Result.Success -> {
+                    if (result.data.code == 0) {
+                        _toast.value = "已移除「${video.title}」"
+                    } else {
+                        _videos.value = original
+                        _filteredVideos.value = originalFiltered
+                        _toast.value = result.data.message.ifEmpty { "删除失败" }
+                    }
+                }
+                is Result.Error -> {
+                    _videos.value = original
+                    _filteredVideos.value = originalFiltered
+                    _toast.value = result.message
+                }
+                Result.Loading -> {}
+            }
+        }
+    }
+
+    /**
+     * 取消追更合集：乐观更新（先从列表移除），失败回滚。
+     * @param seasonMeta 合集元数据（season_id 为字符串，转为 Long 调用接口）
+     */
+    fun unfollowSeason(seasonMeta: SeasonMeta) {
+        val seasonId = seasonMeta.season_id.toLongOrNull() ?: 0L
+        if (seasonId <= 0) {
+            _toast.value = "无法取消追更：无效的合集 id"
+            return
+        }
+        val original = _seasons.value.toList()
+        _seasons.value = _seasons.value.filter { it.season_id != seasonMeta.season_id }
+        viewModelScope.launch {
+            when (val result = favoriteRepository.unfollowSeason(seasonId)) {
+                is Result.Success -> {
+                    if (result.data.code == 0) {
+                        _toast.value = "已取消追更「${seasonMeta.name}」"
+                    } else {
+                        _seasons.value = original
+                        _toast.value = result.data.message.ifEmpty { "取消追更失败" }
+                    }
+                }
+                is Result.Error -> {
+                    _seasons.value = original
+                    _toast.value = result.message
+                }
+                Result.Loading -> {}
+            }
+        }
     }
 }

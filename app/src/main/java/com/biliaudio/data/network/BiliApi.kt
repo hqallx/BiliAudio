@@ -45,6 +45,49 @@ interface BiliApi {
     ): BiliResponse<FavoriteResourceResponse>
 
     /**
+     * 删除收藏夹（可批量）。
+     * 接口：x/v3/fav/folder/del
+     * @param mediaIds 收藏夹 mdid 列表，逗号分隔
+     * @param csrf CSRF token
+     */
+    @FormUrlEncoded
+    @POST("x/v3/fav/folder/del")
+    suspend fun deleteFavFolder(
+        @Field("media_ids") mediaIds: String,
+        @Field("platform") platform: String = "web",
+        @Field("csrf") csrf: String
+    ): ApiActionResponse
+
+    /**
+     * 删除收藏夹内的视频（可批量）。
+     * 接口：x/v3/fav/resource/del
+     * @param resources 格式 "avid,type"，type=2 为视频稿件，多项逗号分隔
+     * @param mediaId 目标收藏夹 id
+     * @param csrf CSRF token
+     */
+    @FormUrlEncoded
+    @POST("x/v3/fav/resource/del")
+    suspend fun deleteFavResource(
+        @Field("resources") resources: String,
+        @Field("media_id") mediaId: Long,
+        @Field("platform") platform: String = "web",
+        @Field("csrf") csrf: String
+    ): ApiActionResponse
+
+    /**
+     * 取消追更合集 / 取关他人收藏夹。
+     * 接口：x/v3/fav/season/like
+     * @param seasonId 合集 id
+     * @param csrf CSRF token
+     */
+    @FormUrlEncoded
+    @POST("x/v3/fav/season/like")
+    suspend fun unfollowSeason(
+        @Field("season_id") seasonId: Long,
+        @Field("csrf") csrf: String
+    ): ApiActionResponse
+
+    /**
      * 获取视频信息（含 cid）。
      * 接口：x/web-interface/view
      * cid 是 playurl 接口的必需参数，必须先通过本接口获取。

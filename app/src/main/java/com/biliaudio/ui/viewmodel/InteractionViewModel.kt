@@ -36,9 +36,10 @@ class InteractionViewModel @Inject constructor(
         currentBvid = bvid
         currentAid = aid
         viewModelScope.launch {
-            // 1. 获取统计信息
-            val statData = videoRepository.fetchVideoStat(bvid)
-            _stat.value = statData
+            // 1. 获取视频信息（含 stat 与 req_user，req_user 含当前用户是否已点赞）
+            val videoInfo = videoRepository.fetchVideoInfo(bvid)
+            _stat.value = videoInfo?.stat
+            _isLiked.value = videoInfo?.reqUser?.isLiked == true
 
             // 2. 获取评论列表
             when (val result = videoRepository.fetchComments(aid)) {

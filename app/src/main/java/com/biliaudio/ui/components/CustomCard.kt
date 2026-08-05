@@ -56,12 +56,14 @@ fun VideoCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     /** 「下一首播放」回调，为 null 时不显示该入口。 */
-    onAddNext: (() -> Unit)? = null
+    onAddNext: (() -> Unit)? = null,
+    /** 长按回调，非 null 时启用长按（用于删除等操作）。 */
+    onLongClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .pressBounce { onClick() },
+            .pressBounce(onLongClick = onLongClick) { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -189,12 +191,14 @@ fun FolderCard(
     count: Int,
     coverUrl: String = "",
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 长按回调，非 null 时启用长按（用于删除等操作）。 */
+    onLongClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .pressBounce { onClick() },
+            .pressBounce(onLongClick = onLongClick) { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -373,4 +377,47 @@ fun ListErrorState(
             }
         }
     }
+}
+
+/**
+ * 通用删除确认对话框。
+ *
+ * 删除收藏夹/合集/视频均为不可逆操作，统一通过本对话框二次确认，
+ * 避免误触长按删除导致数据丢失。文案与色调遵循 Material3 规范。
+ *
+ * @param title 对话框标题
+ * @param message 确认提示文案
+ * @param onConfirm 用户点击「删除」时回调
+ * @param onDismiss 用户点击「取消」或外部区域时回调
+ */
+@Composable
+fun ConfirmDeleteDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = title) },
+        text = { Text(text = message) },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    onConfirm()
+                    onDismiss()
+                }
+            ) {
+                Text(
+                    text = "删除",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
