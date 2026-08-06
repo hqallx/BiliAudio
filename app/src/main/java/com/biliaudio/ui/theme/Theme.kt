@@ -16,6 +16,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+/**
+ * 浅色配色方案。
+ *
+ * 参考 BBPlayer：以中性灰为底、B 站品牌色（粉 #FB7299 + 蓝 #00AEEC）为点缀。
+ * 关键优化：
+ * - 表面层级（surface → surfaceContainerHighest）按 M3 tonal palette 递进，
+ *   保证卡片/MiniPlayer/对话框与背景有清晰区分度，避免「糊成一片」
+ * - onSurfaceVariant 提深到 0xFF49454F，副文字在浅灰背景上对比度达 WCAG AA
+ * - outline 提深到 0xFF9A9A9A，分割线清晰可辨
+ */
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFFFB7299),
     onPrimary = Color.White,
@@ -29,22 +39,40 @@ private val LightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFE7DEFF),
     onTertiaryContainer = Color(0xFF25005D),
-    // 统一页面背景为浅蓝灰，与 AppColors.ScreenBg 一致，避免页面间色差跳变
-    background = Color(0xFFF1F3F8),
-    onBackground = Color(0xFF1F1F1F),
-    surface = Color(0xFFF1F3F8),
-    onSurface = Color(0xFF1F1F1F),
-    surfaceVariant = Color(0xFFE6E8EE),
-    onSurfaceVariant = Color(0xFF8A8F99),
-    outline = Color(0xFFBFBFBF),
-    // M3 v1.2 surface tonal 角色，供 MiniPlayer 等组件使用
-    surfaceContainerHighest = Color(0xFFE6E8EE),
+    // 中性浅灰背景，与品牌粉/蓝形成清爽对比
+    background = Color(0xFFFAFAFA),
+    onBackground = Color(0xFF1C1B1F),
+    surface = Color(0xFFFAFAFA),
+    onSurface = Color(0xFF1C1B1F),
+    surfaceVariant = Color(0xFFE7E0E8),
+    onSurfaceVariant = Color(0xFF49454F),
+    outline = Color(0xFF9A9A9A),
+    outlineVariant = Color(0xFFCAC4CF),
+    // M3 v1.2 surface tonal 角色：tonal 递进，区分背景/卡片/弹层
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF5F3F6),
+    surfaceContainer = Color(0xFFEFEDF0),
+    surfaceContainerHigh = Color(0xFFE9E7EA),
+    surfaceContainerHighest = Color(0xFFE3E1E4),
+    inverseSurface = Color(0xFF313033),
+    inverseOnSurface = Color(0xFFF4EFF4),
 )
 
+/**
+ * 暗色配色方案。
+ *
+ * 参考 BBPlayer：中性深色底（不带红/粉色调，避免与品牌粉冲突显得脏），
+ * 文字用纯白偏暖灰，品牌色适度提亮保证暗色下可读性。
+ * 关键优化：
+ * - background 从偏红的 0xFF201A1A 改为中性 0xFF151515，更干净
+ * - onBackground 从偏粉的 0xFFECE0E0 改为纯白偏暖 0xFFE6E1E5
+ * - surface 层级递进，卡片比背景亮一档，层次清晰
+ * - primaryContainer 提亮到 0xFF9A3A5A，与背景对比度更高
+ */
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFFFFB0C5),
     onPrimary = Color(0xFF5A1130),
-    primaryContainer = Color(0xFF7C2A45),
+    primaryContainer = Color(0xFF9A3A5A),
     onPrimaryContainer = Color(0xFFFFD9E2),
     secondary = Color(0xFF5ED5FF),
     onSecondary = Color(0xFF003547),
@@ -54,14 +82,23 @@ private val DarkColorScheme = darkColorScheme(
     onTertiary = Color(0xFF3E1D90),
     tertiaryContainer = Color(0xFF5C35B5),
     onTertiaryContainer = Color(0xFFE7DEFF),
-    background = Color(0xFF201A1A),
-    onBackground = Color(0xFFECE0E0),
-    surface = Color(0xFF201A1A),
-    onSurface = Color(0xFFECE0E0),
-    surfaceVariant = Color(0xFF514347),
-    onSurfaceVariant = Color(0xFFD5C2C6),
-    outline = Color(0xFF9E8C90),
-    surfaceContainerHighest = Color(0xFF3D3D3D),
+    // 中性深色，不带红/粉色调，与品牌粉点缀色更协调
+    background = Color(0xFF151515),
+    onBackground = Color(0xFFE6E1E5),
+    surface = Color(0xFF151515),
+    onSurface = Color(0xFFE6E1E5),
+    surfaceVariant = Color(0xFF49454F),
+    onSurfaceVariant = Color(0xFFCAC4CF),
+    outline = Color(0xFF948F99),
+    outlineVariant = Color(0xFF49454F),
+    // M3 v1.2 surface tonal 角色：暗色下逐级提亮，卡片/弹层层次清晰
+    surfaceContainerLowest = Color(0xFF101010),
+    surfaceContainerLow = Color(0xFF1D1B1F),
+    surfaceContainer = Color(0xFF211F23),
+    surfaceContainerHigh = Color(0xFF2B292D),
+    surfaceContainerHighest = Color(0xFF363338),
+    inverseSurface = Color(0xFFE6E1E5),
+    inverseOnSurface = Color(0xFF313033),
 )
 
 @Composable

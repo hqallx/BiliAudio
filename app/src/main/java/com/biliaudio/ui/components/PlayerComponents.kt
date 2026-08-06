@@ -90,11 +90,16 @@ import java.util.concurrent.TimeUnit
 // 沉浸式深色表面（参考主流音乐 App）。因此文字/轨道颜色固定为浅色以保证在深色
 // 遮罩上的可读性，不能跟随 MaterialTheme.colorScheme（否则浅色主题下 onSurface
 // 为深色，在深色遮罩上不可见）。仅点缀色走主题以保持品牌一致。
-private val DarkBg = Color(0xFF2C2C2C)            // 无封面时的兜底背景
-private val DarkSurface = Color(0xFF3D3D3D)        // Chip 容器（与暗色 surfaceContainerHighest 对齐）
+//
+// 色板与新暗色主题（background 0xFF151515）协调：
+// - DarkBg 与主题背景一致，无封面时无缝衔接
+// - DarkSurface 用 surfaceContainerHigh 档位，Chip 容器有清晰层次
+// - 副文字提亮（0xFFBBBBBB / 0xFF999999），在深色遮罩上对比度更高
+private val DarkBg = Color(0xFF151515)            // 与暗色主题背景一致，无封面时无缝衔接
+private val DarkSurface = Color(0xFF2B292D)        // Chip 容器（对齐 surfaceContainerHigh）
 private val PlayerTextPrimary = Color(0xFFFFFFFF)
-private val PlayerTextSecondary = Color(0xFFAAAAAA)
-private val PlayerTextMuted = Color(0xFF888888)
+private val PlayerTextSecondary = Color(0xFFBBBBBB)
+private val PlayerTextMuted = Color(0xFF999999)
 private val PlayerAccent: Color @Composable get() = AppColors.AccentPink   // B站粉（点赞高亮，与主题统一）
 private val PlayerTrackBg = Color(0xFF555555)      // 未播放灰条
 private val PlayerTrackPlayed = Color(0xFFFFFFFF)  // 已播放白条
