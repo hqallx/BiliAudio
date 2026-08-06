@@ -322,8 +322,9 @@ class VideoRepository @Inject constructor(
             val resp = api.checkLikeStatus(bvid)
             if (resp.code == 0) {
                 // data 为 JsonPrimitive，值为 0(未赞) 或 1(已赞)
+                // 用 content.toIntOrNull() 兼容旧版 kotlinx.serialization
                 (resp.data as? kotlinx.serialization.json.JsonPrimitive)
-                    ?.intOrNull == 1
+                    ?.content?.toIntOrNull() == 1
             } else null
         } catch (e: Exception) {
             null
