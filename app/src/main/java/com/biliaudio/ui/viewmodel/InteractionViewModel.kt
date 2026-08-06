@@ -36,12 +36,19 @@ class InteractionViewModel @Inject constructor(
         currentBvid = bvid
         currentAid = aid
         viewModelScope.launch {
-            // 1. 获取视频信息（含 stat 与 req_user，req_user 含当前用户是否已点赞）
+            // 1. 获取视频统计信息（点赞数、评论数等）
             val videoInfo = videoRepository.fetchVideoInfo(bvid)
             _stat.value = videoInfo?.stat
-            _isLiked.value = videoInfo?.reqUser?.isLiked == true
 
-            // 2. 获取评论列表
+            // 2. 查询点赞状态：用独立的 has/like 接口（参考 BBPlayer），
+            //    而非 view 的 req_user——后者在风控/未登录场景下可能缺失，
+            //    导致点赞按钮始终灰色。
+            val liked = videoRepository.checkLikeStatus(bvid)
+            if (liked != null) {
+                _isLiked.value = liked
+            }
+
+            // 3. 获取评论列表（mode=3 按热度，plat=1）
             when (val result = videoRepository.fetchComments(aid)) {
                 is Result.Success -> {
                     _comments.value = result.data.data?.replies ?: emptyList()
@@ -58,7 +65,8 @@ class InteractionViewModel @Inject constructor(
             val likeAction = if (_isLiked.value) 2 else 1
             when (val result = videoRepository.likeVideo(currentBvid, likeAction)) {
                 is Result.Success -> {
-                    if (result.data.code == 0) {
+                    // 参考 BBPlayer：code=0 成功；65006=重复点赞，也视为成功
+                    if (result.data.code == 0 || result.data.code == 65006) {
                         _isLiked.value = !_isLiked.value
                         _toast.value = if (_isLiked.value) "点赞成功" else "已取消点赞"
                     } else {

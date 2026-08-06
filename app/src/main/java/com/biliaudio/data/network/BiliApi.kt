@@ -168,14 +168,39 @@ interface BiliApi {
     ): BiliResponse<HistoryResponse>
 
     // ============ 评论 & 点赞 ============
-    /** 获取评论列表（按热度排序） */
+
+    /**
+     * 获取评论列表（按热度排序）。
+     *
+     * 参考 BBPlayer getComments：使用 /x/v2/reply/main 接口，
+     * 关键参数 mode（3=按热度）与 plat（1），并采用 next 游标分页。
+     * 缺少 mode/plat 时该接口可能返回空 replies，是评论加载失败的常见根因。
+     *
+     * @param oid 视频 avid（由 bvid 转换，非直接传入的收藏夹 id）
+     * @param type 1=视频稿件
+     * @param mode 3=按热度，2=按时间
+     * @param next 游标，首页传 0
+     * @param plat 1=web 端标识
+     */
     @GET("x/v2/reply/main")
     suspend fun getComments(
         @Query("oid") oid: Long,
         @Query("type") type: Int = 1,
-        @Query("pn") pn: Int = 1,
-        @Query("ps") ps: Int = 20
+        @Query("mode") mode: Int = 3,
+        @Query("next") next: Int = 0,
+        @Query("plat") plat: Int = 1
     ): ReplyListResponse
+
+    /**
+     * 查询当前视频是否已被点赞。
+     * 参考 BBPlayer checkVideoIsThumbUp：用独立接口而非 view 的 req_user，
+     * 后者在风控/未登录场景下可能缺失，导致点赞按钮状态不准。
+     * @return code=0 时 data 为 0(未赞)/1(已赞)
+     */
+    @GET("x/web-interface/archive/has/like")
+    suspend fun checkLikeStatus(
+        @Query("bvid") bvid: String
+    ): ApiActionResponse
 
     /**
      * 点赞/取消点赞视频。

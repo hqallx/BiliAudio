@@ -296,12 +296,37 @@ class VideoRepository @Inject constructor(
 
     /**
      * 获取评论列表。
+     *
+     * 参考 BBPlayer getComments：使用 /x/v2/reply/main，参数 mode=3（按热度）、
+     * plat=1、next=0（首页）。缺少 mode/plat 时该接口可能返回空 replies，
+     * 是评论加载失败的常见根因。
+     *
+     * @param aid 视频 avid（oid 参数）
      */
-    suspend fun fetchComments(aid: Long, page: Int = 1): Result<ReplyListResponse> {
+    suspend fun fetchComments(aid: Long): Result<ReplyListResponse> {
         return try {
-            Result.Success(api.getComments(oid = aid, type = 1, pn = page, ps = 20))
+            Result.Success(api.getComments(oid = aid, type = 1, mode = 3, next = 0, plat = 1))
         } catch (e: Exception) {
             Result.Error(e, e.message ?: "未知错误")
+        }
+    }
+
+    /**
+     * 查询当前视频是否已被点赞。
+     * 参考 BBPlayer checkVideoIsThumbUp：用独立接口 x/web-interface/archive/has/like，
+     * 而非 view 接口的 req_user（后者在风控/未登录场景下可能缺失）。
+     * @return true=已点赞，false=未点赞，null=查询失败
+     */
+    suspend fun checkLikeStatus(bvid: String): Boolean? {
+        return try {
+            val resp = api.checkLikeStatus(bvid)
+            if (resp.code == 0) {
+                // data 为 JsonPrimitive，值为 0(未赞) 或 1(已赞)
+                (resp.data as? kotlinx.serialization.json.JsonPrimitive)
+                    ?.intOrNull == 1
+            } else null
+        } catch (e: Exception) {
+            null
         }
     }
 

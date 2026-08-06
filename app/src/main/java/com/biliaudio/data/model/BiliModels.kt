@@ -550,11 +550,16 @@ data class VideoStat(
     val like: Long = 0
 )
 
-/** 点赞/发送评论等操作的通用响应 */
+/**
+ * 点赞/发送评论等操作的通用响应。
+ * @property data has/like 接口返回 0(未赞)/1(已赞)；其他写操作多为 null。
+ *           使用 JsonElement 以兼容多种 data 形态（数字/对象/null）。
+ */
 @Serializable
 data class ApiActionResponse(
     val code: Int = 0,
-    val message: String = ""
+    val message: String = "",
+    val data: kotlinx.serialization.json.JsonElement? = null
 )
 
 /** 评论列表响应 */
@@ -565,10 +570,25 @@ data class ReplyListResponse(
     val data: ReplyData? = null
 )
 
+/**
+ * /x/v2/reply/main 响应数据。
+ * 参考 BBPlayer BilibiliCommentsResponse：reply/main 用 cursor 游标分页，
+ * 而 reply/reply（楼中楼）用 page 分页。二者 replies 字段同名，故统一在此模型。
+ */
 @Serializable
 data class ReplyData(
     val replies: List<ReplyItem> = emptyList(),
-    val page: ReplyPage? = null
+    val page: ReplyPage? = null,
+    val cursor: ReplyCursor? = null
+)
+
+/** reply/main 的游标分页信息。 */
+@Serializable
+data class ReplyCursor(
+    val is_end: Boolean = false,
+    val next: Int = 0,
+    val all_count: Int = 0,
+    val prev: Int = 0
 )
 
 @Serializable
